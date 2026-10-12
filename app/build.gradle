@@ -10,8 +10,8 @@ android {
         applicationId 'com.hdlee.pdfnote'
         minSdk 26
         targetSdk 35
-        versionCode 69
-        versionName '1.56.0'
+        versionCode 70
+        versionName '1.57.0'
     }
 
     testOptions {
@@ -19,23 +19,31 @@ android {
         unitTests.all { testLogging { exceptionFormat = 'full' } }
     }
 
-    signingConfigs {
-        // Fixed key so every release/debug APK is signed identically and installs as an update.
-        pdfnote {
-            storeFile file('pdfnote-release.jks')
-            storePassword 'pdfnote2026'
-            keyAlias 'pdfnote'
-            keyPassword 'pdfnote2026'
+    // No signing material lives in the repository. Official release APKs are signed in CI
+    // (see .github/workflows/android.yml and SIGNING.md). For local signed builds, create an
+    // untracked keystore.properties (storeFile, storePassword, keyAlias, keyPassword).
+    def keystorePropsFile = rootProject.file('keystore.properties')
+    if (keystorePropsFile.exists()) {
+        def keystoreProps = new Properties()
+        keystorePropsFile.withInputStream { keystoreProps.load(it) }
+        signingConfigs {
+            create('local') {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
         }
     }
 
     buildTypes {
         debug {
-            signingConfig signingConfigs.pdfnote
+            if (signingConfigs.findByName('local')) signingConfig signingConfigs.local
         }
         release {
             minifyEnabled false
-            signingConfig signingConfigs.pdfnote
+            // Left unsigned unless keystore.properties exists; CI signs it with apksigner.
+            if (signingConfigs.findByName('local')) signingConfig signingConfigs.local
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

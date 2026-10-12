@@ -47,7 +47,7 @@ python3 tools/prepare_hwp_engine.py
 gradle assembleDebug
 ```
 
-GitHub Actions의 `Android CI` 워크플로는 push마다 디버그 APK를 빌드합니다. `v`로 시작하는 태그(예: `v1.0.0`)를 push하면 바로 설치 가능한 APK와 GitHub Release를 생성합니다. 현재 공개 릴리스 APK는 편의상 Android 디버그 키로 서명되므로 Play Store 배포 전에는 별도 비공개 키를 설정해야 합니다.
+GitHub Actions의 `Android CI` 워크플로는 push마다 테스트와 디버그 APK를 빌드합니다. `v`로 시작하는 태그(예: `v1.0.0`)를 push하거나 main에 `[release]` 커밋을 병합하면 `release` 잡이 APK를 서명해 GitHub Release로 게시합니다. 서명 키는 저장소에 없으며 GitHub Environment 비밀값으로만 주입됩니다. 자세한 구조와 키 교체 절차는 [SIGNING.md](SIGNING.md)를 참고하세요.
 
 ## 개인정보
 
