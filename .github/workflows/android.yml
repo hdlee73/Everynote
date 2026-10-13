@@ -122,8 +122,8 @@ jobs:
           "$BT/zipalign" -f -p 4 unsigned/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" sign --ks "$KS" --ks-key-alias "$KEY_ALIAS" \
             --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD \
-            --v1-signing-enabled false --lineage "$LIN" --out signed.apk "$RUNNER_TEMP/aligned.apk"
-          "$BT/apksigner" verify --verbose --print-certs signed.apk | tee verify.txt
+            --v1-signing-enabled false --v2-signing-enabled false --v3-signing-enabled true --lineage "$LIN" --out signed.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify --verbose --print-certs --min-sdk-version 28 signed.apk | tee verify.txt
           grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' verify.txt \
             || { echo "::error::signed APK has no valid v3 signature (rotation lineage missing)"; exit 1; }
           if [ -n "${EXPECTED_CERT_SHA256:-}" ]; then
