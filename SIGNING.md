@@ -36,7 +36,7 @@ keytool -genkeypair -v -keystore everynote-release.jks -alias everynote \
 ```bash
 $APKSIGNER rotate --out everynote.lineage \
   --old-signer --ks pdfnote-release.jks --ks-key-alias pdfnote \
-  --next-signer --ks everynote-release.jks --ks-key-alias everynote
+  --new-signer --ks everynote-release.jks --ks-key-alias everynote
 ```
 비밀번호는 프롬프트에 입력합니다(명령줄에 쓰지 마세요). 확인: `$APKSIGNER lineage --print-certs --in everynote.lineage` 에 인증서 2개(옛 → 새)가 순서대로 나와야 합니다. lineage 파일에는 공개 인증서만 있어 비밀은 아니지만, 영구 보관하세요(다음 교체 때 필요).
 
