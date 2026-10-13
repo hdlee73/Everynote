@@ -3279,6 +3279,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private void showAbout(){
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(22),dp(8),dp(22),0);
         TextView info=new TextView(this);info.setText("Everynote\n버전 "+appVersion()+"\n\n"+AUTHOR_LINE);info.setTextSize(15);info.setTextColor(NAVY);info.setTag("about_info");info.setTextIsSelectable(true);box.addView(info);
+        String cert=CertInfo.current(this);if(!cert.isEmpty()){TextView sig=new TextView(this);sig.setText("서명 인증서 SHA-256\n"+cert);sig.setTextSize(11);sig.setTextColor(0xFF8E8E93);sig.setTag("about_cert");sig.setTextIsSelectable(true);sig.setPadding(0,dp(10),0,0);box.addView(sig);}
         TextView releases=new TextView(this);releases.setText("업데이트 정보 (GitHub 릴리스 페이지)");releases.setTextSize(14);releases.setTextColor(ACCENT);releases.setPaintFlags(releases.getPaintFlags()|Paint.UNDERLINE_TEXT_FLAG);releases.setPadding(0,dp(12),0,dp(2));releases.setTag("about_releases");
         releases.setOnClickListener(v->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(RELEASES_URL)));}catch(Exception e){toast("브라우저를 열 수 없습니다");}});box.addView(releases);
         final TextView status=new TextView(this);status.setTextSize(14);status.setTextColor(0xFF8E8E93);status.setPadding(0,dp(14),0,dp(6));status.setTag("update_status");box.addView(status);
@@ -3296,7 +3297,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
                 if(status!=null){status.setText("새 버전 v"+r.version+" 이(가) 있습니다");status.setTextColor(ACCENT);}
                 if(!manual&&status==null){if(r.version.equals(recentPrefs.getString("update_notified","")))return;recentPrefs.edit().putString("update_notified",r.version).apply();notifyUpdate(r);}
                 String notes=r.notes==null?"":r.notes.trim();if(notes.length()>500)notes=notes.substring(0,500)+"…";
-                new AlertDialog.Builder(this).setTitle("새 버전 v"+r.version).setMessage("현재 v"+appVersion()+(notes.isEmpty()?"":"\n\n"+notes)+"\n\n업데이트를 누르면 설치 파일을 내려받습니다. 내려받은 뒤 알림을 눌러 설치하세요. 문서와 필기는 그대로 유지됩니다.").setPositiveButton("업데이트",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(r.url!=null?r.url:r.page)));}catch(Exception e){toast("브라우저를 열 수 없습니다");}}).setNegativeButton("나중에",null).show();});
+                new AlertDialog.Builder(this).setTitle("새 버전 v"+r.version).setMessage("현재 v"+appVersion()+(notes.isEmpty()?"":"\n\n"+notes)+"\n\n업데이트를 누르면 설치 파일을 내려받습니다. 내려받은 뒤 알림을 눌러 설치하세요. 문서와 필기는 그대로 유지됩니다.").setPositiveButton("업데이트",(d,w)->{try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(UpdateChecker.isTrustedUrl(r.url)?r.url:UpdateChecker.RELEASES_PAGE)));}catch(Exception e){toast("브라우저를 열 수 없습니다");}}).setNegativeButton("나중에",null).show();});
         }catch(Exception error){runOnUiThread(()->{String m="업데이트를 확인하지 못했습니다 (인터넷 연결 확인)";if(status!=null)status.setText(m);else if(manual)toast(m);});}},"update-check").start();
     }
     private void autoCheckForUpdate(){
@@ -3314,7 +3315,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
             }
             android.app.NotificationManager nm=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);if(nm==null)return;
             if(Build.VERSION.SDK_INT>=26)nm.createNotificationChannel(new android.app.NotificationChannel("updates","앱 업데이트",android.app.NotificationManager.IMPORTANCE_DEFAULT));
-            android.app.PendingIntent tap=android.app.PendingIntent.getActivity(this,0,new Intent(Intent.ACTION_VIEW,Uri.parse(r.url!=null?r.url:r.page)),android.app.PendingIntent.FLAG_IMMUTABLE|android.app.PendingIntent.FLAG_UPDATE_CURRENT);
+            android.app.PendingIntent tap=android.app.PendingIntent.getActivity(this,0,new Intent(Intent.ACTION_VIEW,Uri.parse(UpdateChecker.isTrustedUrl(r.url)?r.url:UpdateChecker.RELEASES_PAGE)),android.app.PendingIntent.FLAG_IMMUTABLE|android.app.PendingIntent.FLAG_UPDATE_CURRENT);
             android.app.Notification.Builder b=Build.VERSION.SDK_INT>=26?new android.app.Notification.Builder(this,"updates"):new android.app.Notification.Builder(this);
             b.setSmallIcon(getApplicationInfo().icon).setContentTitle("Everynote 새 버전 v"+r.version).setContentText("눌러서 업데이트를 내려받으세요").setContentIntent(tap).setAutoCancel(true);
             nm.notify(7001,b.build());

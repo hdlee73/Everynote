@@ -4,6 +4,12 @@ local.properties
 **/build/
 *.iml
 *.keystore
+*.jks
+*.p12
+*.pfx
+keystore.properties
+*.lineage
+lineage.bin
 .codex/
 
 # Verified HWP engine binaries are fetched before building.
