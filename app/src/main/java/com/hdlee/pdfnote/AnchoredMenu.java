@@ -129,7 +129,7 @@ final class AnchoredMenu {
             }
             card.addView(icons, new LinearLayout.LayoutParams(-1, Math.round(44 * density)));
         }
-        float natural = Math.min(screenW - 24 * density, (panel ? 304 : wide ? 268 : 250) * density);
+        float natural = Math.min(screenW - 24 * density, (panel ? 344 : wide ? 268 : 250) * density);
         boolean sideRight = true;
         final android.graphics.Rect bar = verticalBar(anchor);
         if (beside && avoid != null) {
