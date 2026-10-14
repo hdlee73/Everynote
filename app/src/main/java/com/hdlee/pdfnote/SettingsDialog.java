@@ -43,7 +43,7 @@ final class SettingsDialog extends Dialog {
         void requestTemplate(PaperChoiceView view);
     }
 
-    private static final int INK = 0xFF1C1C1E, MUTED = 0xFF8E8E93, ACCENT = 0xFF007AFF, BACKGROUND = 0xFFF6F6F8, LINE = 0xFFEFEFF2;
+    private static final int INK = 0xFF1C1C1E, MUTED = 0xFF8E8E93, ACCENT = 0xFF3E6DF0, BACKGROUND = 0xFFF6F6F8, LINE = 0xFFEFEFF2;
     private final Activity activity;
     private final Host host;
     private final LinearLayout body;
@@ -104,7 +104,7 @@ final class SettingsDialog extends Dialog {
     // ---------------------------------------------------------------- rows
     private void section(String title, View... rows) {
         TextView label = text(title, 13, 0xFF6B6B70); label.setTypeface(Typeface.DEFAULT_BOLD); label.setPadding(dp(14), dp(22), 0, dp(8)); body.addView(label, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout card = new LinearLayout(activity); card.setOrientation(LinearLayout.VERTICAL); card.setBackground(round(Color.WHITE, 20)); card.setPadding(0, dp(4), 0, dp(4));
+        LinearLayout card = new LinearLayout(activity); card.setOrientation(LinearLayout.VERTICAL); card.setBackground(round(Color.WHITE, 24)); card.setPadding(0, dp(4), 0, dp(4));
         for (int i = 0; i < rows.length; i++) {
             if (i > 0) { View hair = new View(activity); hair.setBackgroundColor(LINE); LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, Math.max(1, dp(1))); hp.setMargins(dp(18), 0, dp(18), 0); card.addView(hair, hp); }
             card.addView(rows[i], new LinearLayout.LayoutParams(-1, -2));

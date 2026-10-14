@@ -111,6 +111,7 @@ final class AnnotationPainter {
             }else if(e.kind.equals("link")){
                 text(c,"↗ "+e.text,b,Math.max(9,d.width()*.027f),0xFF007AFF);
             }else{
+                if(e.background!=0){Paint backdrop=new Paint(Paint.ANTI_ALIAS_FLAG);backdrop.setColor(e.background);float corner=d.width()*.006f;c.drawRoundRect(b,corner,corner,backdrop);}
                 text(c,e.text,b,Math.max(9,d.width()*e.textSize),adj(e.color),typeface(e.font,e.bold,e.italic),e.align,e.underline,e.strike,e.line());
             }
             c.restoreToCount(rotSave);

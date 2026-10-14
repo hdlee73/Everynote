@@ -165,6 +165,8 @@ final class AnnotationStore {
         /** Typing boxes: paragraph alignment (0 left, 1 centre, 2 right), underline and strike-through. */
         int align;
         boolean underline, strike;
+        /** Typing boxes: background colour behind the text (ARGB, 0 = none). */
+        int background;
         /** Pictures: stretched to fill the box (width and height changed independently) instead of keeping the original ratio. */
         boolean stretch;
         /** Clockwise rotation in degrees around the box centre (pictures, stickers, shapes and tables). */
@@ -182,6 +184,7 @@ final class AnnotationStore {
                     .put("textSize", textSize).put("color", color).put("font", font)
                     .put("bold", bold).put("italic", italic).put("align", align).put("underline", underline).put("strike", strike).put("stretch", stretch).put("alpha", alpha);
             if (lineSpacing > 0) o.put("lineSpacing", lineSpacing);
+            if (background != 0) o.put("bg", background);
             return o;
         }
 
@@ -205,6 +208,7 @@ final class AnnotationStore {
             e.align = Math.max(0, Math.min(2, o.optInt("align", 0)));
             e.underline = o.optBoolean("underline", false);
             e.strike = o.optBoolean("strike", false);
+            e.background = o.optInt("bg", 0);
             e.stretch = o.optBoolean("stretch", false);
             e.lineSpacing = (float) o.optDouble("lineSpacing", 0);
             if (!Float.isFinite(e.lineSpacing) || e.lineSpacing < .8f || e.lineSpacing > 4f) e.lineSpacing = 0f;

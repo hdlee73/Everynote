@@ -26,9 +26,13 @@ final class LibraryDialog extends Dialog {
         void selectedFolder(File folder);
         default void removed(List<File> files){}
         default void settings(){}
+        default void sync(){}
+        default void backup(){}
+        default void restore(){}
     }
     private static final int ALL=0,FAVORITES=1,RECENT=2,FOLDER=3;
-    private static final int INK=0xFF1C1C1E,MUTED=0xFF8E8E93,ACCENT=0xFF007AFF,ACTIVE_BG=0xFFE5F0FF,SURFACE=0xFFFFFFFF;
+    private static final int INK=UiStyle.INK,MUTED=0xFF8E8E93,ACCENT=UiStyle.ACCENT,ACTIVE_BG=0x263E6DF0,SURFACE=0xFFFFFFFF;
+    private static final java.util.Map<String,Integer> pageCounts=new java.util.concurrent.ConcurrentHashMap<>();
     private final Activity activity;
     private final LibraryRepository repository;
     private final Actions actions;
@@ -80,8 +84,8 @@ final class LibraryDialog extends Dialog {
         buildTopBar();buildSelectionBar();buildSearchRow();buildHeading();
         shelf=new ScrollView(activity);shelf.setVerticalScrollBarEnabled(false);grid=new LinearLayout(activity);grid.setOrientation(LinearLayout.VERTICAL);grid.setPadding(dp(14),dp(6),dp(14),dp(96));shelf.addView(grid,new ScrollView.LayoutParams(-1,-2));page.addView(shelf,new LinearLayout.LayoutParams(-1,0,1));
         ImageView composeIcon=new ImageView(activity);composeIcon.setImageResource(R.drawable.ic_compose);composeIcon.setColorFilter(0xFFE5484D);composeIcon.setPadding(dp(15),dp(15),dp(15),dp(15));
-        FrameLayout composeHost=new FrameLayout(activity);composeHost.setTag("compose_button");composeHost.setContentDescription("새로 만들기");composeHost.setBackground(round(Color.WHITE,28));composeHost.setElevation(dp(6));composeHost.addView(composeIcon,new FrameLayout.LayoutParams(-1,-1));composeHost.setOnClickListener(this::newMenu);compose=composeHost;
-        FrameLayout.LayoutParams composeParams=new FrameLayout.LayoutParams(dp(56),dp(56),Gravity.BOTTOM|Gravity.END);composeParams.setMargins(0,0,dp(22),dp(24));content.addView(compose,composeParams);
+        FrameLayout composeHost=new FrameLayout(activity);composeHost.setTag("compose_button");composeHost.setContentDescription("새로 만들기");composeHost.setBackground(roundStroke(Color.WHITE,22,0x14000000));composeHost.setElevation(dp(8));composeHost.addView(composeIcon,new FrameLayout.LayoutParams(-1,-1));composeHost.setOnClickListener(this::newMenu);compose=composeHost;
+        FrameLayout.LayoutParams composeParams=new FrameLayout.LayoutParams(dp(60),dp(60),Gravity.BOTTOM|Gravity.END);composeParams.setMargins(0,0,dp(20),dp(24));content.addView(compose,composeParams);
         buildDrawer();setContentView(content);
         setOnDismissListener(d->{generation++;previews.shutdownNow();});shelf.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol)shelf.post(this::refreshGrid);});refresh();
     }
@@ -102,24 +106,25 @@ final class LibraryDialog extends Dialog {
         main.addView(rail,new LinearLayout.LayoutParams(dp(68),-1));
     }
     private void buildTopBar(){
-        LinearLayout bar=new LinearLayout(activity);topBar=bar;bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(6),dp(4),dp(6),0);
-        bar.addView(icon(R.drawable.ic_chevron_left,"문서함 닫기",v->dismiss()),new LinearLayout.LayoutParams(dp(48),dp(52)));
-        if(!wide){menuButton=icon(R.drawable.ic_menu,"폴더 트리 보기",v->openDrawer());bar.addView(menuButton,new LinearLayout.LayoutParams(dp(48),dp(52)));}
-        bar.addView(new View(activity),new LinearLayout.LayoutParams(0,1,1));
-        bar.addView(icon(R.drawable.ic_search,"문서 이름 검색",v->toggleSearch()),new LinearLayout.LayoutParams(dp(48),dp(52)));
-        bar.addView(icon(R.drawable.ic_more_vert,"문서함 메뉴",this::libraryMenu),new LinearLayout.LayoutParams(dp(48),dp(52)));
-        page.addView(bar,new LinearLayout.LayoutParams(-1,dp(56)));
+        LinearLayout bar=new LinearLayout(activity);topBar=bar;bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(8),dp(6),dp(8),0);
+        if(!wide){menuButton=icon(R.drawable.ic_menu,"폴더 트리 보기",v->openDrawer());bar.addView(menuButton,new LinearLayout.LayoutParams(dp(48),dp(56)));}
+        heading=label("",26,INK);heading.setTag("library_heading");heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);heading.setSingleLine();heading.setEllipsize(TextUtils.TruncateAt.END);heading.setPadding(dp(wide?14:8),0,dp(8),0);bar.addView(heading,new LinearLayout.LayoutParams(0,-1,1));
+        bar.addView(icon(R.drawable.ic_pdf,"PDF 가져오기",v->actions.importFiles(target())),new LinearLayout.LayoutParams(dp(46),dp(56)));
+        bar.addView(icon(R.drawable.ic_search,"문서 이름 검색",v->toggleSearch()),new LinearLayout.LayoutParams(dp(46),dp(56)));
+        bar.addView(icon(R.drawable.ic_more_vert,"문서함 메뉴",this::libraryMenu),new LinearLayout.LayoutParams(dp(46),dp(56)));
+        page.addView(bar,new LinearLayout.LayoutParams(-1,dp(62)));
     }
+    /** Folder new documents and imports go to: the open folder, or the library root in the all / favourites / recent lists. */
+    private File target(){return mode==FOLDER?folder:repository.root;}
     private void buildSearchRow(){
         searchRow=new LinearLayout(activity);searchRow.setGravity(Gravity.CENTER_VERTICAL);searchRow.setPadding(dp(16),0,dp(16),dp(6));searchRow.setVisibility(View.GONE);
         search=new EditText(activity);search.setSingleLine();search.setTextSize(15);search.setTextColor(INK);search.setHint("문서 이름 검색");search.setContentDescription("문서 이름 입력");search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence q,int start,int count,int after){}public void onTextChanged(CharSequence q,int start,int before,int count){refreshGrid();}public void afterTextChanged(Editable e){}});
         searchRow.addView(search,new LinearLayout.LayoutParams(-1,dp(46)));page.addView(searchRow,new LinearLayout.LayoutParams(-1,-2));
     }
     private void buildHeading(){
-        LinearLayout block=new LinearLayout(activity);headingBlock=block;block.setOrientation(LinearLayout.VERTICAL);block.setGravity(Gravity.CENTER_HORIZONTAL);block.setPadding(dp(16),dp(2),dp(16),dp(8));
+        LinearLayout block=new LinearLayout(activity);headingBlock=block;block.setOrientation(LinearLayout.VERTICAL);block.setGravity(Gravity.START);block.setPadding(dp(22),0,dp(16),dp(6));
         upButton=button("","상위 폴더로",v->{if(!folder.equals(repository.root))selectFolder(folder.getParentFile());});upButton.setTag("folder_up");upButton.setTextSize(13);upButton.setTextColor(ACCENT);upButton.setGravity(Gravity.CENTER);upButton.setPadding(dp(14),0,dp(14),0);upButton.setBackground(round(ACTIVE_BG,16));block.addView(upButton,new LinearLayout.LayoutParams(-2,dp(32)));
-        heading=label("",30,INK);heading.setTag("library_heading");heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setGravity(Gravity.CENTER);heading.setSingleLine();heading.setEllipsize(TextUtils.TruncateAt.END);heading.setPadding(0,dp(6),0,0);block.addView(heading,new LinearLayout.LayoutParams(-1,dp(54)));
-        subtitle=label("",15,MUTED);subtitle.setGravity(Gravity.CENTER);block.addView(subtitle,new LinearLayout.LayoutParams(-1,dp(26)));
+        subtitle=label("",13,MUTED);subtitle.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);block.addView(subtitle,new LinearLayout.LayoutParams(-1,dp(24)));
         page.addView(block,new LinearLayout.LayoutParams(-1,-2));
     }
     /** Replaces the top bar while documents are selected: back, "N개 선택됨", icon commands (with labels on wide screens) and a ⋮ menu. */
@@ -167,30 +172,38 @@ final class LibraryDialog extends Dialog {
     private void buildDrawer(){
         drawer=new FrameLayout(activity);drawer.setTag("library_drawer");drawer.setVisibility(View.GONE);
         View scrim=new View(activity);drawerScrim=scrim;scrim.setBackgroundColor(0x40000000);scrim.setOnClickListener(v->closeDrawer());drawer.addView(scrim,new FrameLayout.LayoutParams(-1,-1));
-        LinearLayout panel=new LinearLayout(activity);panel.setOrientation(LinearLayout.VERTICAL);GradientDrawable panelShape=new GradientDrawable();panelShape.setColor(Color.WHITE);panelShape.setCornerRadii(new float[]{0,0,dp(28),dp(28),dp(28),dp(28),0,0});panel.setBackground(panelShape);panel.setElevation(dp(14));panel.setPadding(dp(6),dp(14),dp(10),dp(12));drawerPanel=panel;
+        LinearLayout panel=new LinearLayout(activity);panel.setOrientation(LinearLayout.VERTICAL);panel.setBackground(UiStyle.softPanel(activity,28));panel.setElevation(dp(16));panel.setPadding(dp(10),dp(10),dp(10),dp(10));drawerPanel=panel;
         LinearLayout top=new LinearLayout(activity);top.setGravity(Gravity.CENTER_VERTICAL);top.addView(icon(R.drawable.ic_menu,"폴더 트리 닫기",v->closeDrawer()),new LinearLayout.LayoutParams(dp(56),dp(48)));top.addView(new View(activity),new LinearLayout.LayoutParams(0,1,1));panel.addView(top,new LinearLayout.LayoutParams(-1,dp(48)));
-        int[] icons={R.drawable.ic_document_tab,R.drawable.ic_star_outline,R.drawable.ic_clock,R.drawable.ic_delete};String[] names={"전체 문서","즐겨찾기","최근 문서","휴지통"};
-        for(int i=0;i<4;i++){final int index=i;panel.addView(drawerRow(icons[i],names[i],"drawer_count:"+i,v->{closeDrawer();if(index==3)showTrash();else showMode(index);}),new LinearLayout.LayoutParams(-1,dp(52)));}
-        View dots=new View(activity);dots.setBackground(dotted());LinearLayout.LayoutParams dp1=new LinearLayout.LayoutParams(-1,dp(2));dp1.setMargins(dp(10),dp(8),dp(10),dp(8));panel.addView(dots,dp1);
-        panel.addView(drawerRow(R.drawable.ic_folder_open,"폴더","drawer_count:4",null),new LinearLayout.LayoutParams(-1,dp(52)));
+        int[] icons={R.drawable.ic_notes_all,R.drawable.ic_star_outline,R.drawable.ic_clock,R.drawable.ic_delete};String[] names={"전체 문서","즐겨찾기","최근 문서","휴지통"};String[] labels={"모든 노트","즐겨찾기","최근 문서","휴지통"};
+        for(int i=0;i<4;i++){final int index=i;panel.addView(drawerRow(icons[i],names[i],labels[i],"drawer_count:"+i,v->{closeDrawer();if(index==3)showTrash();else showMode(index);}),new LinearLayout.LayoutParams(-1,dp(52)));}
+        panel.addView(UiStyle.dottedDivider(activity,10,8));
+        panel.addView(drawerRow(R.drawable.ic_folder_open,"폴더","폴더","drawer_count:4",null),new LinearLayout.LayoutParams(-1,dp(52)));
         tree=new FolderTreeView(activity,repository,folder,this::selectFolder);tree.setFolderMenu(this::folderMenu);tree.setBackgroundColor(Color.TRANSPARENT);panel.addView(tree,new LinearLayout.LayoutParams(-1,0,1));
-        TextView manage=button("폴더 관리","폴더 관리",this::folderManageMenu);manage.setTextColor(INK);manage.setTextSize(16);manage.setTypeface(Typeface.DEFAULT_BOLD);manage.setBackground(round(0xFFF2F2F7,24));LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,dp(48));mp.setMargins(dp(24),dp(8),dp(24),0);panel.addView(manage,mp);
-        View settingsDots=new View(activity);settingsDots.setBackground(dotted());LinearLayout.LayoutParams sdp=new LinearLayout.LayoutParams(-1,dp(2));sdp.setMargins(dp(10),dp(8),dp(10),dp(4));panel.addView(settingsDots,sdp);
-        panel.addView(drawerRow(R.drawable.ic_settings,"설정","drawer_count:5",v->{closeDrawer();actions.settings();}),new LinearLayout.LayoutParams(-1,dp(52)));
-        int width=Math.min(dp(320),Math.round(activity.getResources().getDisplayMetrics().widthPixels*.86f));drawerWidth=width;drawer.addView(panel,new FrameLayout.LayoutParams(width,-1,Gravity.START));
+        TextView manage=button("폴더 관리","폴더 관리",this::folderManageMenu);manage.setTextColor(INK);manage.setTextSize(16);manage.setTypeface(Typeface.DEFAULT_BOLD);manage.setBackground(round(0x99FFFFFF,24));LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,dp(48));mp.setMargins(dp(24),dp(8),dp(24),0);panel.addView(manage,mp);
+        panel.addView(UiStyle.dottedDivider(activity,10,8));
+        panel.addView(drawerRow(R.drawable.ic_sync,"동기화 · 백업","동기화 · 백업","drawer_count:6",this::syncMenu),new LinearLayout.LayoutParams(-1,dp(52)));
+        panel.addView(drawerRow(R.drawable.ic_settings,"설정","설정","drawer_count:5",v->{closeDrawer();actions.settings();}),new LinearLayout.LayoutParams(-1,dp(52)));
+        int width=Math.min(dp(330),Math.round(activity.getResources().getDisplayMetrics().widthPixels*.86f));drawerWidth=width+dp(24);FrameLayout.LayoutParams panelParams=new FrameLayout.LayoutParams(width,-1,Gravity.START);panelParams.setMargins(dp(10),dp(10),0,dp(10));drawer.addView(panel,panelParams);
         content.addView(drawer,new FrameLayout.LayoutParams(-1,-1));
     }
-    private View drawerRow(int iconRes,String title,String countTag,View.OnClickListener click){
+    private View drawerRow(int iconRes,String title,String shown,String countTag,View.OnClickListener click){
         LinearLayout row=new LinearLayout(activity);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(14),0,dp(16),0);row.setContentDescription(title);row.setTag("drawer_row:"+title);
-        ImageView image=new ImageView(activity);image.setImageResource(iconRes);row.addView(image,new LinearLayout.LayoutParams(dp(28),dp(28)));
-        TextView name=label(title,18,INK);name.setPadding(dp(18),0,0,0);row.addView(name,new LinearLayout.LayoutParams(0,-1,1));
+        ImageView image=new ImageView(activity);image.setImageResource(iconRes);row.addView(image,new LinearLayout.LayoutParams(dp(26),dp(26)));
+        TextView name=label(shown,17,INK);name.setPadding(dp(18),0,0,0);row.addView(name,new LinearLayout.LayoutParams(0,-1,1));
         TextView count=label("",16,MUTED);count.setTag(countTag);row.addView(count,new LinearLayout.LayoutParams(-2,-1));
-        if(click!=null){row.setOnClickListener(click);row.setBackground(round(0x00000000,26));}return row;
+        if(click!=null){row.setOnClickListener(click);row.setBackground(round(0x00000000,22));}return row;
+    }
+    /** 동기화 · 백업 entry of the drawer: opens a small menu with the existing device sync and whole-library backup actions. */
+    private void syncMenu(View anchor){
+        AnchoredMenu.show(activity,anchor,true,AnchoredMenu.rows(
+            new AnchoredMenu.Row("다른 기기와 동기화",R.drawable.ic_sync,()->{closeDrawer();actions.sync();}).tint(ACCENT),
+            new AnchoredMenu.Row("모든 문서 백업",R.drawable.ic_backup,()->{closeDrawer();actions.backup();}).tint(ACCENT),
+            new AnchoredMenu.Row("모든 문서 복원",R.drawable.ic_import,()->{closeDrawer();actions.restore();}).tint(ACCENT)),null);
     }
     private void updateDrawerCounts(){
         int[] counts={repository.allDocuments("").size(),repository.favorites("").size(),Math.min(40,repository.allDocuments("").size()),repository.trashItems().size(),repository.folderCount()};
         for(int i=0;i<counts.length;i++){View v=drawer.findViewWithTag("drawer_count:"+i);if(v instanceof TextView)((TextView)v).setText(i==2?"":String.valueOf(counts[i]));}
-        for(int i=0;i<4;i++){View row=drawer.findViewWithTag("drawer_row:"+new String[]{"전체 문서","즐겨찾기","최근 문서","휴지통"}[i]);if(row!=null)row.setBackground(round(i<3&&mode==i?ACTIVE_BG:0x00000000,26));}
+        for(int i=0;i<4;i++){View row=drawer.findViewWithTag("drawer_row:"+new String[]{"전체 문서","즐겨찾기","최근 문서","휴지통"}[i]);if(row!=null)row.setBackground(round(i<3&&mode==i?ACTIVE_BG:0x00000000,22));}
     }
     private void beginDrawerDrag(){if(drawerAnim!=null)drawerAnim.cancel();if(drawer.getVisibility()!=View.VISIBLE){tree.select(folder);updateDrawerCounts();setDrawerProgress(0);drawer.setVisibility(View.VISIBLE);}}
     private void setDrawerProgress(float p){drawerP=p;if(drawerPanel!=null){drawerPanel.setTranslationX(-drawerWidth*(1-p));drawerScrim.setAlpha(p);}}
@@ -214,9 +227,9 @@ final class LibraryDialog extends Dialog {
     private void selectFolder(File selectedFolder){this.selected.clear();selectionMode=false;mode=FOLDER;folder=selectedFolder;actions.selectedFolder(folder);closeDrawer();refresh();}
     private List<File> items(){String q=search.getText().toString();switch(mode){case ALL:return repository.allDocuments(q);case FAVORITES:return repository.favorites(q);case RECENT:return repository.recent(q,40);default:return repository.sorted(folder,q);}}
     private void refresh(){styleRail();refreshGrid();}
-    private void styleRail(){for(int i=0;i<4;i++){View b=railButtons[i];if(b!=null)b.setBackground(round(i<3&&mode==i?ACTIVE_BG:0x00000000,26));}}
+    private void styleRail(){for(int i=0;i<4;i++){View b=railButtons[i];if(b!=null)b.setBackground(round(i<3&&mode==i?ACTIVE_BG:0x00000000,22));}}
     private void updateHeading(List<File> items){
-        String title=mode==ALL?"전체 문서":mode==FAVORITES?"즐겨찾기":mode==RECENT?"최근 문서":folder.equals(repository.root)?"문서함":folder.getName();heading.setText(title);
+        String title=mode==ALL?"모든 노트":mode==FAVORITES?"즐겨찾기":mode==RECENT?"최근 문서":folder.equals(repository.root)?"문서함":folder.getName();heading.setText(title);
         int folders=0,docs=0;for(File f:items){if(f.isDirectory())folders++;else docs++;}
         subtitle.setText((folders>0?"폴더 "+folders+"개 · ":"")+"문서 "+docs+"개");
         boolean nested=mode==FOLDER&&!folder.equals(repository.root);upButton.setVisibility(nested?View.VISIBLE:View.GONE);if(nested)upButton.setText(Glyph.leading(activity,R.drawable.ic_chevron_left,upButton.getCurrentTextColor(),18,folder.getParentFile().equals(repository.root)?"문서함":folder.getParentFile().getName()));
@@ -226,7 +239,7 @@ final class LibraryDialog extends Dialog {
         selectionBar.setVisibility(selectionMode?View.VISIBLE:View.GONE);topBar.setVisibility(selectionMode?View.GONE:View.VISIBLE);headingBlock.setVisibility(selectionMode?View.GONE:View.VISIBLE);if(selectionMode)searchRow.setVisibility(View.GONE);compose.setVisibility(selectionMode?View.GONE:View.VISIBLE);if(selectionMode){selectionCount.setText(selected.size()+"개 선택됨");rebuildSelectionCommands();}
         int viewMode=repository.viewMode();int usable=Math.max(shelf.getWidth(),dp(240))-dp(28);int columns=viewMode==2?1:Math.max(1,Math.min(6,usable/dp(viewMode==1?118:164)));int cell=viewMode==2?0:usable/columns-dp(14);
         if(items.isEmpty()){TextView empty=label(search.getText().length()>0?"검색 결과가 없습니다":mode==FAVORITES?"즐겨찾기한 문서가 없습니다":"아직 문서가 없습니다",16,MUTED);empty.setGravity(Gravity.CENTER);grid.addView(empty,new LinearLayout.LayoutParams(-1,dp(140)));return;}
-        for(int i=0;i<items.size();i+=columns){LinearLayout row=new LinearLayout(activity);row.setGravity(Gravity.TOP);grid.addView(row,new LinearLayout.LayoutParams(-1,-2));for(int j=0;j<columns;j++){int index=i+j;LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(0,-2,1);layout.setMargins(dp(7),dp(4),dp(7),dp(12));if(index<items.size())row.addView(viewMode==2?listItem(items.get(index),version):card(items.get(index),version,cell),layout);else row.addView(new View(activity),layout);}}
+        for(int i=0;i<items.size();i+=columns){LinearLayout row=new LinearLayout(activity);row.setGravity(Gravity.TOP);grid.addView(row,new LinearLayout.LayoutParams(-1,-2));for(int j=0;j<columns;j++){int index=i+j;LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(0,-2,1);layout.setMargins(dp(7),dp(4),dp(7),viewMode==2?dp(2):dp(12));if(index<items.size())row.addView(viewMode==2?listItem(items.get(index),version):card(items.get(index),version,cell),layout);else row.addView(new View(activity),layout);}}
     }
     private View card(File file,int version,int cell){
         LinearLayout card=new LinearLayout(activity);card.setTag("document:"+file.getName());card.setOrientation(LinearLayout.VERTICAL);card.setGravity(Gravity.CENTER_HORIZONTAL);card.setContentDescription(file.getName());
@@ -249,20 +262,31 @@ final class LibraryDialog extends Dialog {
         if(now.get(Calendar.YEAR)==then.get(Calendar.YEAR)&&now.get(Calendar.DAY_OF_YEAR)==then.get(Calendar.DAY_OF_YEAR))return new SimpleDateFormat("a h:mm",Locale.KOREA).format(date);
         if(now.get(Calendar.YEAR)==then.get(Calendar.YEAR))return new SimpleDateFormat("M월 d일",Locale.KOREA).format(date);return new SimpleDateFormat("yyyy. M. d",Locale.KOREA).format(date);
     }
-    private void preview(File file,ImageView cover,int version){
-        String key=file.getAbsolutePath()+":"+file.lastModified()+":"+AnnotationStore.modified(activity,Uri.fromFile(file))+":top";Bitmap cached=covers.get(key);if(cached!=null){cover.setImageBitmap(cached);return;}
+    private void preview(File file,ImageView cover,int version){preview(file,cover,version,null);}
+    private void preview(File file,ImageView cover,int version,Runnable counted){
+        String key=file.getAbsolutePath()+":"+file.lastModified()+":"+AnnotationStore.modified(activity,Uri.fromFile(file))+":top";Bitmap cached=covers.get(key);if(cached!=null){cover.setImageBitmap(cached);if(counted!=null)counted.run();return;}
         previews.execute(()->{if(version!=generation)return;try(ParcelFileDescriptor descriptor=ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY);PdfRenderer renderer=new PdfRenderer(descriptor);PdfRenderer.Page page=renderer.openPage(0)){
+            pageCounts.put(pageKey(file),renderer.getPageCount());
             float scale=Math.min(320f/page.getWidth(),480f/page.getHeight());Bitmap bitmap=Bitmap.createBitmap(Math.max(1,Math.round(page.getWidth()*scale)),Math.max(1,Math.round(page.getHeight()*scale)),Bitmap.Config.ARGB_8888);bitmap.eraseColor(Color.WHITE);Matrix matrix=new Matrix();matrix.postScale(scale,scale);page.render(bitmap,null,matrix,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);AnnotationStore notes=new AnnotationStore(activity);notes.open(Uri.fromFile(file));AnnotationPainter.all(activity,new Canvas(bitmap),new RectF(0,0,bitmap.getWidth(),bitmap.getHeight()),notes,0);
             Bitmap top=bitmap.getHeight()>bitmap.getWidth()?Bitmap.createBitmap(bitmap,0,0,bitmap.getWidth(),bitmap.getWidth()):bitmap;
-            covers.put(key,top);activity.runOnUiThread(()->{if(isShowing()&&version==generation)cover.setImageBitmap(top);});
+            covers.put(key,top);activity.runOnUiThread(()->{if(isShowing()&&version==generation){cover.setImageBitmap(top);if(counted!=null)counted.run();}});
         }catch(Exception ignored){}});
     }
+    private String pageKey(File file){return file.getAbsolutePath()+":"+file.lastModified();}
+    /** Second line of a list row: "date · N쪽 · folder name" (the page count appears once the cover has been read). */
+    private String metaLine(File file){
+        if(file.isDirectory())return repository.list(file).size()+"개 항목";
+        StringBuilder line=new StringBuilder(dateText(file));
+        Integer pages=pageCounts.get(pageKey(file));if(pages!=null&&pages>0)line.append(" · ").append(pages).append("쪽");
+        File parent=file.getParentFile();line.append(" · ").append(parent==null||parent.equals(repository.root)?"문서함":parent.getName());
+        return line.toString();
+    }
     private View listItem(File file,int version){
-        LinearLayout row=new LinearLayout(activity);row.setTag("document:"+file.getName());row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(10),dp(8),dp(10),dp(8));row.setBackground(round(Color.WHITE,14));row.setContentDescription(file.getName());
-        ImageView image=new ImageView(activity);image.setScaleType(ImageView.ScaleType.CENTER_CROP);row.addView(image,new LinearLayout.LayoutParams(dp(56),dp(56)));
-        if(file.isDirectory()){image.setImageDrawable(new FolderShapeDrawable(repository.folderColor(file)));}else{image.setBackground(roundStroke(Color.WHITE,12,0x1A2B2F4A));image.setClipToOutline(true);image.setOutlineProvider(new ViewOutlineProvider(){public void getOutline(View v,Outline outline){outline.setRoundRect(0,0,v.getWidth(),v.getHeight(),dp(12));}});image.setImageResource(R.drawable.ic_note_add);preview(file,image,version);}
-        LinearLayout text=new LinearLayout(activity);text.setOrientation(LinearLayout.VERTICAL);text.setPadding(dp(14),0,dp(4),0);TextView name=label(file.getName().replaceFirst("(?i)\\.pdf$",""),15,INK);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);name.setTypeface(Typeface.DEFAULT_BOLD);text.addView(name,new LinearLayout.LayoutParams(-1,-2));
-        TextView meta=label(file.isDirectory()?repository.list(file).size()+"개 항목":dateText(file)+(mode==ALL||mode==FAVORITES||mode==RECENT?" · "+(file.getParentFile().equals(repository.root)?"문서함":file.getParentFile().getName()):""),12,MUTED);text.addView(meta,new LinearLayout.LayoutParams(-1,-2));row.addView(text,new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout row=new LinearLayout(activity);row.setTag("document:"+file.getName());row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(8),dp(7),dp(8),dp(7));row.setBackground(pressBackground());row.setContentDescription(file.getName());
+        ImageView image=new ImageView(activity);image.setScaleType(ImageView.ScaleType.CENTER_CROP);row.addView(image,new LinearLayout.LayoutParams(dp(54),dp(54)));
+        LinearLayout text=new LinearLayout(activity);text.setOrientation(LinearLayout.VERTICAL);text.setPadding(dp(16),0,dp(4),0);TextView name=label(file.getName().replaceFirst("(?i)\\.pdf$",""),17,INK);name.setSingleLine();name.setEllipsize(TextUtils.TruncateAt.END);name.setTypeface(Typeface.DEFAULT_BOLD);text.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        TextView meta=label(metaLine(file),13,MUTED);meta.setSingleLine();meta.setEllipsize(TextUtils.TruncateAt.END);meta.setPadding(0,dp(2),0,0);text.addView(meta,new LinearLayout.LayoutParams(-1,-2));row.addView(text,new LinearLayout.LayoutParams(0,-2,1));
+        if(file.isDirectory()){image.setImageDrawable(new FolderShapeDrawable(repository.folderColor(file)));}else{image.setBackground(roundStroke(Color.WHITE,14,0x1A2B2F4A));image.setClipToOutline(true);image.setOutlineProvider(new ViewOutlineProvider(){public void getOutline(View v,Outline outline){outline.setRoundRect(0,0,v.getWidth(),v.getHeight(),dp(14));}});image.setImageResource(R.drawable.ic_note_add);preview(file,image,version,()->meta.setText(metaLine(file)));}
         if(file.isFile()&&repository.favorite(file)){ImageView star=new ImageView(activity);star.setImageResource(R.drawable.ic_star);star.setColorFilter(0xFFFFB020);row.addView(star,new LinearLayout.LayoutParams(dp(22),dp(22)));}
         if(selectionMode&&file.isFile()){CheckBox check=new CheckBox(activity);check.setChecked(selected.contains(file));check.setContentDescription("선택 "+file.getName());check.setOnClickListener(v->toggleSelected(file));row.addView(check,new LinearLayout.LayoutParams(dp(40),dp(48)));}
         row.setOnClickListener(v->openOrSelect(file));row.setOnLongClickListener(v->{longPressed(file,v);return true;});return row;
@@ -272,23 +296,25 @@ final class LibraryDialog extends Dialog {
 
     // ---------------------------------------------------------------- menus and actions
     private void newMenu(View anchor){
-        final File target=mode==FOLDER?folder:repository.root;
+        final File target=target();
         AnchoredMenu.showCentered(activity,anchor,"문서 추가",AnchoredMenu.rows(
             new AnchoredMenu.Row("새 노트 만들기",R.drawable.ic_compose,()->actions.newNote(target,this::refresh)).tint(0xFF34C759),
             new AnchoredMenu.Row("파일 가져오기",R.drawable.ic_import,()->{dismiss();actions.importFiles(target);}).tint(0xFF007AFF),
             new AnchoredMenu.Row("폴더 만들기",R.drawable.ic_folder_open,()->createFolder(target,()->{tree.reload();refresh();})).tint(0xFFF5A623)));
     }
     private void libraryMenu(View anchor){
-        PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add(0,1,0,"선택");menu.getMenu().add(0,2,1,"보기 방법");menu.getMenu().add(0,3,2,"정렬");menu.getMenu().add(0,4,3,(repository.pinFavorites()?"✓  ":"")+"즐겨찾기 맨 위 고정");
-        if(mode==FOLDER)menu.getMenu().add(0,5,4,"폴더 색상");menu.getMenu().add(0,6,5,"휴지통");menu.getMenu().add(0,7,6,"설정");
-        menu.setOnMenuItemClickListener(item->{switch(item.getItemId()){
-            case 1:selectionMode=!selectionMode;selected.clear();refreshGrid();break;
-            case 2:new AlertDialog.Builder(activity).setTitle("보기 방법").setSingleChoiceItems(LibraryRepository.VIEW_NAMES,repository.viewMode(),(d,index)->{repository.viewMode(index);d.dismiss();refreshGrid();}).show();break;
-            case 3:new AlertDialog.Builder(activity).setTitle("정렬").setSingleChoiceItems(LibraryRepository.SORT_NAMES,repository.sortMode(),(d,index)->{repository.sortMode(index);d.dismiss();refreshGrid();}).show();break;
-            case 4:repository.pinFavorites(!repository.pinFavorites());refreshGrid();break;
-            case 5:chooseFolderColor(folder);break;
-            case 7:actions.settings();break;
-            default:showTrash();}return true;});menu.show();
+        List<AnchoredMenu.Row> rows=new ArrayList<>();
+        rows.add(new AnchoredMenu.Row("선택",0,()->{selectionMode=!selectionMode;selected.clear();refreshGrid();}));
+        rows.add(new AnchoredMenu.Row("보기 방식",0,()->new AlertDialog.Builder(activity).setTitle("보기 방식").setSingleChoiceItems(LibraryRepository.VIEW_NAMES,repository.viewMode(),(d,index)->{repository.viewMode(index);d.dismiss();refreshGrid();}).show()));
+        rows.add(new AnchoredMenu.Row("정렬 방식",0,()->new AlertDialog.Builder(activity).setTitle("정렬 방식").setSingleChoiceItems(LibraryRepository.SORT_NAMES,repository.sortMode(),(d,index)->{repository.sortMode(index);d.dismiss();refreshGrid();}).show()));
+        rows.add(new AnchoredMenu.Row("즐겨찾기를 상단에 고정",0,()->{repository.pinFavorites(!repository.pinFavorites());refreshGrid();}).selected(repository.pinFavorites()));
+        if(mode==FOLDER)rows.add(new AnchoredMenu.Row("폴더 색상",0,()->chooseFolderColor(folder)));
+        rows.add(new AnchoredMenu.Row("휴지통",0,this::showTrash));
+        rows.add(new AnchoredMenu.Row("일괄 백업",0,()->actions.backup()));
+        rows.add(new AnchoredMenu.Row("동기화",0,()->actions.sync()));
+        rows.add(new AnchoredMenu.Row("설정",0,()->actions.settings()));
+        rows.add(new AnchoredMenu.Row("문서함 닫기",0,this::dismiss));
+        AnchoredMenu.show(activity,anchor,false,rows,null);
     }
     private void folderMenu(File target,View anchor){PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add("폴더 색상");menu.getMenu().add("하위 폴더 만들기");menu.setOnMenuItemClickListener(item->{if(item.getTitle().equals("폴더 색상"))chooseFolderColor(target);else createFolder(target,()->{tree.reload();refresh();});return true;});menu.show();}
     private void folderManageMenu(View anchor){PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add("폴더 만들기");menu.getMenu().add("선택한 폴더 색상");menu.setOnMenuItemClickListener(item->{File target=tree.selected();if(item.getTitle().equals("폴더 만들기"))createFolder(target,()->{tree.reload();refresh();});else chooseFolderColor(target);return true;});menu.show();}

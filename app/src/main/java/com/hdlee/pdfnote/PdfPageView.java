@@ -371,7 +371,7 @@ final class PdfPageView extends View {
     }
 
     void setDirectTextSelection(boolean enabled){directTextSelection=enabled;clearTextSelectionOverlay();}
-    void copyToolsFrom(PdfPageView other){darkPage=other.darkPage;applyBackground();directTextSelection=other.directTextSelection;highlightMode=other.highlightMode;memoMode=other.memoMode;outlineMode=other.outlineMode;highlightColor=other.highlightColor;highlightFree=other.highlightFree;highlightThick=other.highlightThick;inkMode=other.inkMode;eraserPartial=other.eraserPartial;inkColor=other.inkColor;inkWidth=other.inkWidth;eraserRadius=other.eraserRadius;inkPen=other.inkPen;fingerInk=other.fingerInk;pageSwipeEnabled=other.pageSwipeEnabled;verticalPageSwipe=other.verticalPageSwipe;lassoShape=other.lassoShape;if(lassoMode!=other.lassoMode){lassoMode=other.lassoMode;clearLassoSelection();}invalidate();}
+    void copyToolsFrom(PdfPageView other){darkPage=other.darkPage;applyBackground();directTextSelection=other.directTextSelection;highlightMode=other.highlightMode;memoMode=other.memoMode;outlineMode=other.outlineMode;highlightColor=other.highlightColor;highlightFree=other.highlightFree;highlightThick=other.highlightThick;inkMode=other.inkMode;eraserPartial=other.eraserPartial;eraserHighlightOnly=other.eraserHighlightOnly;inkColor=other.inkColor;inkWidth=other.inkWidth;eraserRadius=other.eraserRadius;inkPen=other.inkPen;fingerInk=other.fingerInk;pageSwipeEnabled=other.pageSwipeEnabled;verticalPageSwipe=other.verticalPageSwipe;lassoShape=other.lassoShape;if(lassoMode!=other.lassoMode){lassoMode=other.lassoMode;clearLassoSelection();}invalidate();}
     void setAnnotationStore(AnnotationStore store){annotationStore=store;invalidate();}
     void setFingerInk(boolean enabled){fingerInk=enabled;}
     void setPageSwipeEnabled(boolean enabled){pageSwipeEnabled=enabled;}
@@ -797,6 +797,10 @@ final class PdfPageView extends View {
     /** Eraser radius in dp (the circle shown under the finger / pen while erasing). */
     private float eraserRadius=10f;private float eraserX=-1,eraserY=-1;private boolean eraserPartial;
     void setEraserPartial(boolean on){eraserPartial=on;}
+    /** When on the eraser only touches highlighter strokes and highlights, never pen ink. */
+    private boolean eraserHighlightOnly;
+    void setEraserHighlightOnly(boolean on){eraserHighlightOnly=on;}
+    boolean eraserHighlightOnly(){return eraserHighlightOnly;}
     boolean eraserPartial(){return eraserPartial;}
     /** Removes every ink stroke and highlight of this page; returns whether anything was removed. */
     /** What the last {@link #clearPageInk()} removed, so the caller can offer an undo. */
@@ -821,8 +825,8 @@ final class PdfPageView extends View {
     void setEraserRadius(float dp){eraserRadius=Math.max(3f,Math.min(60f,dp));}
     float eraserRadius(){return eraserRadius;}
     private void eraseAt(MotionEvent e,RectF dest){eraserX=e.getX();eraserY=e.getY();if(strokes==null||dest.width()==0)return;float r=eraserRadius*getResources().getDisplayMetrics().density,ex=e.getX(),ey=e.getY();boolean changed=false;
-        if(eraserPartial)for(int i=strokes.size()-1;i>=0;i--){AnnotationStore.InkStroke s=strokes.get(i);if(s.page!=page)continue;List<AnnotationStore.InkStroke> rest=cutStroke(s,dest,ex,ey,r);if(rest==null)continue;strokes.remove(i);strokes.addAll(i,rest);changed=true;}
-        else for(int i=strokes.size()-1;i>=0;i--){AnnotationStore.InkStroke s=strokes.get(i);if(s.page!=page)continue;float reach=r+s.width*dest.width()/2f;for(AnnotationStore.InkPoint p:s.points)if(Math.hypot(dest.left+p.x*dest.width()-ex,dest.top+p.y*dest.height()-ey)<=reach){strokes.remove(i);changed=true;break;}}
+        if(eraserPartial)for(int i=strokes.size()-1;i>=0;i--){AnnotationStore.InkStroke s=strokes.get(i);if(s.page!=page||(eraserHighlightOnly&&s.pen!=AnnotationPainter.HIGHLIGHTER))continue;List<AnnotationStore.InkStroke> rest=cutStroke(s,dest,ex,ey,r);if(rest==null)continue;strokes.remove(i);strokes.addAll(i,rest);changed=true;}
+        else for(int i=strokes.size()-1;i>=0;i--){AnnotationStore.InkStroke s=strokes.get(i);if(s.page!=page||(eraserHighlightOnly&&s.pen!=AnnotationPainter.HIGHLIGHTER))continue;float reach=r+s.width*dest.width()/2f;for(AnnotationStore.InkPoint p:s.points)if(Math.hypot(dest.left+p.x*dest.width()-ex,dest.top+p.y*dest.height()-ey)<=reach){strokes.remove(i);changed=true;break;}}
         if(marks!=null)for(int i=marks.size()-1;i>=0;i--){AnnotationStore.Mark m=marks.get(i);if(m.page!=page||m.noteOnly)continue;float l=dest.left+m.left*dest.width(),t=dest.top+m.top*dest.height(),rr=dest.left+m.right*dest.width(),b=dest.top+m.bottom*dest.height();float nx=Math.max(l,Math.min(rr,ex)),ny=Math.max(t,Math.min(b,ey));if(Math.hypot(nx-ex,ny-ey)<=r){marks.remove(i);changed=true;}}
         if(changed)listener.onInkChanged();invalidate();}
 
