@@ -270,19 +270,22 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         content.addView(studySplit,new LinearLayout.LayoutParams(-1,0,1));layoutStudyPanel();
         bottomBar=new LinearLayout(this);bottomBar.setTag("reading_toolbar");bottomBar.setGravity(Gravity.CENTER_VERTICAL);bottomBar.setPadding(dp(6),0,dp(6),0);barSurface=new GradientDrawable();barSurface.setColor(Color.WHITE);barSurface.setCornerRadii(new float[]{dp(22),dp(22),dp(22),dp(22),0,0,0,0});bottomBar.setBackground(barSurface);bottomBar.setElevation(dp(8));
         readBar=new LinearLayout(this);readBar.setTag("read_bar");readBar.setGravity(Gravity.CENTER_VERTICAL);writeBar=new LinearLayout(this);writeBar.setTag("writing_toolbar");writeBar.setGravity(Gravity.CENTER_VERTICAL);writeBar.setVisibility(View.VISIBLE);writeBar.setTag("writing_toolbar");
-        barIcon(readBar,R.drawable.ic_eye,"보기 방법",0xFF30B0C7,v->showViewMenu(v));
-        readButton=barIcon(readBar,R.drawable.ic_book,"읽기 모드",0xFF007AFF,v->setWriteMode(false));
-        inkButton=barIcon(readBar,R.drawable.ic_ink,"필기 모드",0xFF5856D6,v->inkModeTap());
-        eraserBarButton=barIcon(readBar,R.drawable.ic_eraser,"지우개",0xFFFF6B8A,v->eraserBarTap(v));
-        textButton=barIcon(readBar,R.drawable.ic_text,"타이핑",0xFF34C759,v->toggleTyping());
-        bookmarkButton=barIcon(readBar,R.drawable.ic_star_outline,"즐겨찾기",0xFFF5A623,v->toggleBookmark());
-        lassoButton=barIcon(readBar,R.drawable.ic_lasso,"올가미 선택",0xFFAF52DE,v->toggleLasso(v));
+        // Samsung Notes style: one row. A big round button at the left swaps between the pen row and the typing row; undo / redo are always there.
+        inkButton=barIcon(readBar,R.drawable.ic_text,"타이핑 도구로 전환",UiStyle.INK,v->toggleToolRow());inkButton.setBackground(UiStyle.circleStroke(this,Color.WHITE,0xFFC9CEDA,1.5f));
+        LinearLayout.LayoutParams toggleParams=new LinearLayout.LayoutParams(dp(46),dp(46));toggleParams.setMargins(dp(2),0,dp(6),0);inkButton.setLayoutParams(toggleParams);
+        penButton=barIcon(readBar,R.drawable.ic_ink,"펜",0xFF1C1C1E,v->penTap(v));penRow.add(penButton);
+        hlButton=barIcon(readBar,R.drawable.ic_highlight,"형광펜",0xFFF5C400,v->highlightTap(v));penRow.add(hlButton);
+        eraserButton=eraserBarButton=barIcon(readBar,R.drawable.ic_eraser,"지우개",0xFFFF6B8A,v->eraserBarTap(v));penRow.add(eraserButton);
+        lassoButton=barIcon(readBar,R.drawable.ic_lasso,"올가미 선택",UiStyle.INK,v->toggleLasso(v));penRow.add(lassoButton);
+        textButton=barIcon(readBar,R.drawable.ic_text,"타이핑",UiStyle.INK,v->toggleTyping());typeRow.add(textButton);
+        typeRow.add(barIcon(readBar,R.drawable.ic_rect,"도형 삽입",UiStyle.INK,v->{if(renderer==null){toast("문서를 먼저 여세요");return;}dropTarget=null;showShapeDialog(null);}));
+        typeRow.add(barIcon(readBar,R.drawable.ic_image,"이미지 삽입",UiStyle.INK,v->{if(renderer==null){toast("문서를 먼저 여세요");return;}dropTarget=null;insertImage();}));
+        barIcon(readBar,R.drawable.ic_undo,"실행 취소",0xFF6B6F7B,v->undoInk());
+        barIcon(readBar,R.drawable.ic_redo,"다시 실행",0xFF6B6F7B,v->redoInk());
+        // not part of the bar any more (the favourite star lives in the ⋮ menu, reading mode in the ⋮ menu); kept so their state painting stays valid
+        readButton=icon(R.drawable.ic_book,"읽기 모드",UiStyle.ACCENT,v->setWriteMode(false));bookmarkButton=icon(R.drawable.ic_star_outline,"즐겨찾기",0xFFF5A623,v->toggleBookmark());
+        toolRow=recentPrefs==null?0:recentPrefs.getInt("tool_row",0)==1?1:0;updateToolRows();
         writeBar.setBackground(round(0xF8FFFFFF,22));writeBar.setElevation(dp(8));writeBar.setPadding(dp(4),0,dp(4),0);
-        penButton=stripIcon(R.drawable.ic_ink,"펜",0xFF1C1C1E,v->penTap(v));
-        hlButton=stripIcon(R.drawable.ic_highlight,"형광펜",0xFFF5C400,v->highlightTap(v));
-        eraserButton=stripIcon(R.drawable.ic_eraser,"지우개",0xFFFF6B8A,v->eraserTap(v));
-        stripIcon(R.drawable.ic_undo,"실행 취소",0xFF8E8E93,v->undoInk());
-        stripIcon(R.drawable.ic_redo,"다시 실행",0xFF8E8E93,v->redoInk());
         writeBar.addView(makeGrip(stripBox=new LinearLayout(this),"strip"),0,new LinearLayout.LayoutParams(dp(18),dp(44)));   // the strip floats: drag the dotted grip to move it
         stripBox.setOrientation(LinearLayout.VERTICAL);stripBox.setGravity(Gravity.CENTER_HORIZONTAL);stripBox.setVisibility(View.GONE);stripBox.setTag("write_strip_box");stripBox.addView(writeBar,new LinearLayout.LayoutParams(-2,dp(44)));
         inkOptions=new LinearLayout(this);inkOptions.setTag("ink_options");inkOptions.setOrientation(LinearLayout.VERTICAL);inkOptions.setBackground(round(0xF8FFFFFF,18));inkOptions.setElevation(dp(8));inkOptions.setPadding(dp(6),dp(4),dp(6),dp(2));inkOptions.setVisibility(View.GONE);
@@ -331,7 +334,8 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     /** The pen / highlighter / eraser strip floats on the page while writing; it can be kept visible or hidden (the choice is remembered). */
     private void setWriteStripShown(boolean on){recentPrefs.edit().putBoolean("write_strip",on).apply();updateWriteStrip();toast(on?"필기 도구 줄을 계속 보여줍니다":"필기 도구 줄을 숨겼습니다. 필기 모드 단추를 눌러 다시 볼 수 있습니다");}
     private void updateWriteStrip(){
-        boolean show=writeMode&&writeStripShown();if(stripBox!=null){boolean was=stripBox.getVisibility()==View.VISIBLE;stripBox.setVisibility(show?View.VISIBLE:View.GONE);if(show&&!was)applyFloatPos(stripBox,"strip");}
+        boolean show=false;   // pen, highlighter and eraser live in the bottom bar now
+        if(stripBox!=null){boolean was=stripBox.getVisibility()==View.VISIBLE;stripBox.setVisibility(show?View.VISIBLE:View.GONE);if(show&&!was)applyFloatPos(stripBox,"strip");}
         positionTopTools();
     }
     /** The pen strip floats at the top of the page, below the split-view name bar when that is shown. */
@@ -1041,14 +1045,14 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private void toggleMemoMode(){placementKind="";if(renderer==null)return;memoMode=!memoMode;highlightMode=outlineMode=false;stopInk();updateToolStates();pageView.setHighlightMode(false,selectedColor);pageView.setOutlineMode(false);pageView.setMemoMode(memoMode);toast(memoMode?"메모를 놓을 위치를 탭하세요":"메모를 종료했습니다");}
     private void toggleOutlineMode(){if(renderer==null)return;outlineMode=!outlineMode;highlightMode=memoMode=false;stopInk();pageView.setHighlightMode(false,selectedColor);pageView.setMemoMode(false);pageView.setOutlineMode(outlineMode);updateToolStates();toast(outlineMode?"개요로 저장할 정확한 위치를 탭하세요":"개요 지점 선택을 종료했습니다");}
     private void paintTool(ImageButton button,boolean on,int background,int foreground){if(button==null)return;button.setColorFilter(on?foreground:baseTint.containsKey(button)?baseTint.get(button):NAVY);button.setBackground(on?round(background,22):round(Color.TRANSPARENT,22));}
-    private void updateToolStates(){commitInlineText();syncOtherTools();updateInkButton();boolean typing=typingActive(),memo=memoMode&&!typing;paintTool(insertButton,memo||highlightMode,ACTIVE_BG,ACTIVE_FG);paintTool(readButton,!writeMode,ACTIVE_BG,ACTIVE_FG);paintTool(inkButton,writeMode,ACTIVE_BG,ACTIVE_FG);paintTool(textButton,typing,ACTIVE_BG,ACTIVE_FG);paintTool(lassoButton,pageView!=null&&pageView.isLassoMode(),ACTIVE_BG,ACTIVE_FG);}
+    private void updateToolStates(){commitInlineText();syncOtherTools();updateInkButton();boolean typing=typingActive(),memo=memoMode&&!typing;paintTool(insertButton,memo||highlightMode,ACTIVE_BG,ACTIVE_FG);paintTool(readButton,!writeMode,ACTIVE_BG,ACTIVE_FG);paintTool(textButton,typing,ACTIVE_BG,ACTIVE_FG);paintTool(lassoButton,pageView!=null&&pageView.isLassoMode(),ACTIVE_BG,ACTIVE_FG);}
     private void stopInk(){pageView.setLassoMode(false);inkMode=0;inkHl=false;applyInk();updateInkButton();}
     private void setInkMode(int mode){placementKind="";if(renderer==null)return;pageView.setLassoMode(false);inkMode=mode;pageView.setDirectTextSelection(false);highlightMode=memoMode=outlineMode=false;pageView.setHighlightMode(false,selectedColor);pageView.setMemoMode(false);pageView.setOutlineMode(false);if(mode!=1&&mode!=3)inkHl=false;applyInk();updateToolStates();updateInkButton();toast(mode==3?(inkHl?"직선 형광펜: 시작점에서 끝점까지 드래그하세요":"직선: 시작점에서 끝점까지 드래그하세요"):mode==1&&inkHl?"형광펜: 쓰듯이 자유롭게 칠하세요":mode==1?(fingerInk?"손가락 또는 S펜으로 필기하세요":"S펜으로 필기하세요. 손가락 필기는 필기도구에서 켤 수 있습니다"):mode==2?"지울 획을 터치하세요":"읽기 모드 · 빠르게 스와이프하면 페이지를 넘깁니다");}
     private int soft(int color){return (color&0xFFFFFF)|0x26000000;}
     private void updateInkButton(){boolean hl=inkHl&&(inkMode==1||inkMode==3),eraser=inkMode==2,pen=!hl&&(inkMode==1||inkMode==3);int penColor=inkColor|0xFF000000,hlColor=hlInkColor|0xFF000000;
         if(penButton!=null)baseTint.put(penButton,penColor);if(hlButton!=null)baseTint.put(hlButton,hlColor);
         paintTool(penButton,pen,soft(penColor),penColor);paintTool(hlButton,hl,soft(hlColor),hlColor);paintTool(eraserButton,eraser,0xFFFFE3E8,0xFFFF3B30);paintTool(eraserBarButton,eraser&&writeMode,0xFFFFE3E8,0xFFFF3B30);updateInkOptions();
-        if(penButton!=null)penButton.setContentDescription("펜");if(inkButton!=null){inkButton.setContentDescription("필기 모드");}}
+        if(penButton!=null)penButton.setContentDescription("펜");}
     private void toggleFingerInk(){fingerInk=!fingerInk;recentPrefs.edit().putBoolean("finger_ink",fingerInk).apply();pageView.setFingerInk(fingerInk);syncOtherTools();toast(fingerInk?"펜·지우개는 손가락으로도 사용합니다. 두 손가락으로 확대하세요":"손가락은 선택·이동, S펜은 필기에 사용합니다");}
     private void undoInk(){if(store==null)return;
         if(activeSession!=null&&activeSession.clearedPage==currentPage){store.strokes.addAll(activeSession.clearedStrokes);store.marks.addAll(activeSession.clearedMarks);activeSession.clearedStrokes.clear();activeSession.clearedMarks.clear();activeSession.clearedPage=-1;store.save();pageView.invalidate();refreshStudyPanel();toast("지운 필기를 되살렸습니다");return;}
@@ -1549,8 +1553,6 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         if(place.equals("float")){rows.add(AnchoredMenu.Row.divider());boolean v=recentPrefs.getBoolean("bar_vertical",false);
             rows.add(new AnchoredMenu.Row("가로 방향",R.drawable.ic_float,()->{recentPrefs.edit().putBoolean("bar_vertical",false).apply();applyBarMode();}).tint(0xFF8E8E93).selected(!v));
             rows.add(new AnchoredMenu.Row("세로 방향",R.drawable.ic_float,()->{recentPrefs.edit().putBoolean("bar_vertical",true).apply();applyBarMode();}).tint(0xFF8E8E93).selected(v));}
-        rows.add(AnchoredMenu.Row.divider());
-        rows.add(new AnchoredMenu.Row("필기 도구 줄 항상 보이기",R.drawable.ic_ink,()->setWriteStripShown(!writeStripShown())).tint(0xFF5856D6).selected(writeStripShown()));
         AnchoredMenu.show(this,anchor,place.equals("bottom")||(place.equals("float")&&!barVertical()),rows,null);
     }
     /** Switches the bar (and its read / write rows) between a horizontal row and a vertical column. */
@@ -1559,7 +1561,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         for(LinearLayout row:new LinearLayout[]{readBar}){
             row.setOrientation(vertical?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);row.setGravity(vertical?Gravity.CENTER_HORIZONTAL:Gravity.CENTER_VERTICAL);
             for(int i=0;i<row.getChildCount();i++){View c=row.getChildAt(i);LinearLayout.LayoutParams p;
-                if(c==pageLabel){p=vertical?new LinearLayout.LayoutParams(dp(44),dp(30)):new LinearLayout.LayoutParams(dp(64),dp(32));if(vertical)p.setMargins(0,0,0,dp(4));else p.setMargins(0,0,dp(5),0);pageLabel.setTextSize(vertical?9:11);}
+                if(c==inkButton){p=new LinearLayout.LayoutParams(dp(46),dp(46));if(vertical)p.setMargins(0,0,0,dp(4));else p.setMargins(dp(2),0,dp(6),0);}
                 else{p=vertical?new LinearLayout.LayoutParams(dp(44),0,1):new LinearLayout.LayoutParams(0,dp(44),1);if(vertical)p.setMargins(0,dp(1),0,dp(1));else p.setMargins(dp(2),0,dp(2),0);}
                 c.setLayoutParams(p);}
             LinearLayout.LayoutParams rp=vertical?new LinearLayout.LayoutParams(-1,0,1):new LinearLayout.LayoutParams(0,-1,1);row.setLayoutParams(rp);}
@@ -1567,6 +1569,18 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         if(barMenuButton!=null)barMenuButton.setLayoutParams(vertical?new LinearLayout.LayoutParams(dp(44),dp(38)):new LinearLayout.LayoutParams(dp(38),dp(44)));
     }
     private ImageButton barMenuButton;private int insetTop;
+    private final List<View> penRow=new ArrayList<>(),typeRow=new ArrayList<>();private int toolRow;
+    /** The big round button of the bar: swaps the pen row (pen, highlighter, eraser, lasso) and the typing row (text, shape, image). */
+    private void toggleToolRow(){
+        int next=toolRow==0?1:0;
+        if(next==0&&typingActive())toggleTyping();
+        toolRow=next;if(recentPrefs!=null)recentPrefs.edit().putInt("tool_row",toolRow).apply();updateToolRows();
+    }
+    private void updateToolRows(){
+        for(View v:penRow)v.setVisibility(toolRow==0?View.VISIBLE:View.GONE);
+        for(View v:typeRow)v.setVisibility(toolRow==1?View.VISIBLE:View.GONE);
+        if(inkButton!=null){inkButton.setImageResource(toolRow==0?R.drawable.ic_text:R.drawable.ic_ink);inkButton.setContentDescription(toolRow==0?"타이핑 도구로 전환":"필기 도구로 전환");}
+    }
     private ImageButton readButton,insertButton; private View paneFrame;
     /** A docked side rail takes its width from the page area (not in full screen). */
     private void railMargin(){if(contentColumn==null)return;FrameLayout.LayoutParams cl=(FrameLayout.LayoutParams)contentColumn.getLayoutParams();String p=barPlace();int rail=fullscreen?0:dp(56);cl.leftMargin=p.equals("left")?rail:0;cl.rightMargin=p.equals("right")?rail:0;contentColumn.setLayoutParams(cl);}
