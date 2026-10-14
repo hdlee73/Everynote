@@ -1449,6 +1449,9 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
             public void changed(File source,File target,boolean moved){if(moved)libraryChanged(source,target);}
             public void selectedFolder(File folder){libraryFolder=folder;}
             public void settings(){showSettings();}
+            public void sync(){showDeviceSync();}
+            public void backup(){startLibraryBackup();}
+            public void restore(){startLibraryRestore();}
             public void removed(List<File> files){for(DocumentSession session:new ArrayList<>(sessions))if(files.contains(new File(session.uri.getPath())))closeDocument(session);}
         });libraryDialog.show();
     }

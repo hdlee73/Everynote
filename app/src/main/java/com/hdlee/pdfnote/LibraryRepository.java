@@ -26,7 +26,7 @@ final class LibraryRepository {
     static final String[] FOLDER_COLOR_NAMES={"블루","오렌지","그린","퍼플","로즈","그레이"};
     int sortMode(){return Math.max(0,Math.min(3,preferences.getInt("sort",0)));}
     void sortMode(int mode){preferences.edit().putInt("sort",mode).apply();}
-    int viewMode(){return Math.max(0,Math.min(2,preferences.getInt("view",0)));}
+    int viewMode(){return Math.max(0,Math.min(2,preferences.getInt("view",2)));}
     void viewMode(int mode){preferences.edit().putInt("view",mode).apply();}
     int folderColor(File folder){int saved=preferences.getInt("color:"+folder.getAbsolutePath(),FOLDER_COLORS[0]);for(int i=0;i<LEGACY_FOLDER_COLORS.length;i++)if(saved==LEGACY_FOLDER_COLORS[i])return FOLDER_COLORS[i];return saved;}
     void folderColor(File folder,int color){preferences.edit().putInt("color:"+folder.getAbsolutePath(),color).apply();}

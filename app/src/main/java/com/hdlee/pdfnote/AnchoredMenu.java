@@ -23,7 +23,7 @@ import java.util.List;
  * or directly above it (bottom-toolbar menus).
  */
 final class AnchoredMenu {
-    static final int INK = 0xFF1C1C1E, ACCENT = 0xFF007AFF, GRAY = 0xFF8E8E93, LINE = 0xFFE5E5EA, RED = 0xFFFF3B30;
+    static final int INK = 0xFF17181C, ACCENT = 0xFF3E6DF0, GRAY = 0xFF8E8E93, LINE = 0xFFE5E5EA, RED = 0xFFE5484D;
 
     static final class Row {
         final String label; final int icon; final Runnable action; boolean selected, danger, submenu, divider; View custom; int tint; List<Row> children;
@@ -45,6 +45,18 @@ final class AnchoredMenu {
 
     private AnchoredMenu() {}
 
+    /** Set for the duration of one {@link #build} call: draws the card with the light blue to lavender wash instead of plain white. */
+    private static boolean softTheme;
+
+    /** Like {@link #show(Context, View, boolean, List, List)} with the soft gradient card (document ⋮ menu). */
+    static PopupWindow showSoft(Context context, View anchor, boolean above, List<Row> rows, List<Shortcut> shortcuts) {
+        softTheme = true;
+        try { return show(context, anchor, above, rows, shortcuts); } finally { softTheme = false; }
+    }
+
+    /** A rounded card in the middle of the screen (pen, eraser and text-format panels); {@code rows} normally holds one custom row. */
+    static PopupWindow showPanel(Context context, View anyView, List<Row> rows) { return build(context, anyView, false, rows, null, null, 2, true); }
+
     /** @param above true to place the card right above the anchor (toolbar menus), false to drop it below the anchor. */
     static PopupWindow show(Context context, View anchor, boolean above, List<Row> rows, List<Shortcut> shortcuts) { return show(context, anchor, above, rows, shortcuts, null); }
 
@@ -56,21 +68,24 @@ final class AnchoredMenu {
     /** @param tapped for a submenu: the tapped row on screen; the new card opens right beside it, level with it. */
     private static PopupWindow build(Context context, View anchor, boolean above, List<Row> rows, List<Shortcut> shortcuts, android.graphics.Rect avoid, int mode, boolean focusable, android.graphics.Rect tapped) {
         final boolean beside = mode == 1;
+        final boolean soft = softTheme; softTheme = false;
         final float density = context.getResources().getDisplayMetrics().density;
         final int screenW = context.getResources().getDisplayMetrics().widthPixels, screenH = context.getResources().getDisplayMetrics().heightPixels;
         final PopupWindow[] holder = new PopupWindow[1], childWin = new PopupWindow[1];
         final LinearLayout[] cardRef = new LinearLayout[1];
         LinearLayout card = new LinearLayout(context); card.setOrientation(LinearLayout.VERTICAL); card.setTag("anchored_menu"); cardRef[0] = card;
-        GradientDrawable bg = new GradientDrawable(); bg.setColor(Color.WHITE); bg.setCornerRadius(18 * density); bg.setStroke(Math.max(1, Math.round(density * .5f)), 0x14000000); card.setBackground(bg);
-        card.setPadding(Math.round(6 * density), Math.round(6 * density), Math.round(6 * density), Math.round(6 * density)); card.setElevation(12 * density);
+        card.setBackground(soft ? UiStyle.softPanel(context, 24) : UiStyle.panel(context, 24));
+        card.setPadding(Math.round(8 * density), Math.round(8 * density), Math.round(8 * density), Math.round(8 * density)); card.setElevation(16 * density);
         LinearLayout list = new LinearLayout(context); list.setOrientation(LinearLayout.VERTICAL);
         boolean wide = false, panel = false;
         for (final Row row : rows) {
             if (row.custom != null) { list.addView(row.custom, new LinearLayout.LayoutParams(-1, -2)); wide = true; panel |= "pen_panel".equals(row.custom.getTag()); continue; }
-            if (row.divider) { View line = new View(context); line.setBackgroundColor(LINE); LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Math.max(1, Math.round(density * .5f))); lp.setMargins(Math.round(12 * density), Math.round(4 * density), Math.round(12 * density), Math.round(4 * density)); list.addView(line, lp); continue; }
-            LinearLayout line = new LinearLayout(context); line.setGravity(Gravity.CENTER_VERTICAL); line.setPadding(Math.round(12 * density), Math.round(4 * density), Math.round(12 * density), Math.round(4 * density)); line.setMinimumHeight(Math.round(42 * density)); line.setContentDescription(row.label);
+            if (row.divider) { list.addView(UiStyle.dottedDivider(context, 12, 4)); continue; }
+            LinearLayout line = new LinearLayout(context); line.setGravity(Gravity.CENTER_VERTICAL); line.setPadding(Math.round(12 * density), Math.round(4 * density), Math.round(12 * density), Math.round(4 * density)); line.setMinimumHeight(Math.round(48 * density)); line.setContentDescription(row.label);
             if (row.icon != 0) { ImageView glyph = new ImageView(context); glyph.setImageResource(row.icon); glyph.setColorFilter(row.danger ? RED : row.tint != 0 ? row.tint : ACCENT); LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(Math.round(20 * density), Math.round(20 * density)); gp.rightMargin = Math.round(12 * density); line.addView(glyph, gp); }
-            TextView text = new TextView(context); text.setText(row.label); text.setTextSize(14); text.setMaxLines(2); text.setEllipsize(android.text.TextUtils.TruncateAt.END); text.setAutoSizeTextTypeUniformWithConfiguration(11, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP);   // small screens: shrink before cutting text.setTextColor(row.danger ? RED : row.selected ? ACCENT : INK); if (row.selected) text.setTypeface(Typeface.DEFAULT_BOLD);
+            TextView text = new TextView(context); text.setText(row.label); text.setTextSize(15); text.setMaxLines(2); text.setEllipsize(android.text.TextUtils.TruncateAt.END); text.setAutoSizeTextTypeUniformWithConfiguration(11, 15, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+            // small screens: shrink before cutting text
+            text.setTextColor(row.danger ? RED : row.selected ? ACCENT : INK); if (row.selected) text.setTypeface(Typeface.DEFAULT_BOLD);
             line.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
             if (row.selected || row.submenu) { ImageView mark = new ImageView(context); mark.setImageResource(row.submenu ? R.drawable.ic_chevron_right : R.drawable.ic_check_bold); mark.setColorFilter(row.submenu ? GRAY : ACCENT); mark.setScaleType(ImageView.ScaleType.FIT_CENTER); LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(Math.round((row.submenu ? 18 : 20) * density), Math.round((row.submenu ? 18 : 20) * density)); mp.leftMargin = Math.round(8 * density); line.addView(mark, mp); }
             line.setOnClickListener(v -> {
@@ -81,28 +96,34 @@ final class AnchoredMenu {
                     List<Row> inner = new ArrayList<>();
                     for (final Row child : row.children) inner.add(child.custom != null || child.divider ? child : child.copy(() -> { if (holder[0] != null) holder[0].dismiss(); if (child.action != null) child.action.run(); }));
                     int[] rl = new int[2]; v.getLocationOnScreen(rl);
-                    childWin[0] = build(context, anchor, above, inner, null, box, 1, false, new android.graphics.Rect(rl[0], rl[1], rl[0] + v.getWidth(), rl[1] + v.getHeight()));
+                    softTheme = soft;
+                    try { childWin[0] = build(context, anchor, above, inner, null, box, 1, false, new android.graphics.Rect(rl[0], rl[1], rl[0] + v.getWidth(), rl[1] + v.getHeight())); } finally { softTheme = false; }
                     return;
                 }
                 if (holder[0] != null) holder[0].dismiss(); if (row.action != null) row.action.run(); });
             list.addView(line, new LinearLayout.LayoutParams(-1, -2));
         }
         ScrollView scroll = new ScrollView(context) { @Override protected void onMeasure(int w, int h) { super.onMeasure(w, MeasureSpec.makeMeasureSpec(Math.round(screenH * .6f), MeasureSpec.AT_MOST)); } };
-        scroll.setVerticalScrollBarEnabled(false); scroll.addView(list);
+        scroll.setVerticalScrollBarEnabled(true); scroll.setScrollbarFadingEnabled(false); scroll.setScrollBarSize(Math.max(2, Math.round(3 * density)));
+        if (android.os.Build.VERSION.SDK_INT >= 29) scroll.setVerticalScrollbarThumbDrawable(UiStyle.round(context, 0x55000000, 2));
+        scroll.addView(list);
         android.widget.FrameLayout scrollBox = new android.widget.FrameLayout(context); scrollBox.addView(scroll, new android.widget.FrameLayout.LayoutParams(-1, -2));
         // more rows below the visible part: a fading strip with a double chevron (⌄⌄) that disappears at the end of the list
-        final ImageView more = new ImageView(context); more.setImageResource(R.drawable.ic_chevron_double_down); more.setColorFilter(ACCENT); more.setScaleType(ImageView.ScaleType.CENTER_INSIDE); more.setPadding(0, Math.round(5 * density), 0, Math.round(3 * density)); more.setTag("menu_more"); more.setContentDescription("아래에 더 있음");
-        more.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0x00FFFFFF, 0xF2FFFFFF, 0xFFFFFFFF})); more.setVisibility(View.GONE);
+        final android.widget.FrameLayout more = new android.widget.FrameLayout(context); more.setTag("menu_more"); more.setContentDescription("아래에 더 있음");
+        more.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, soft ? new int[]{0x00F1F4FB, 0xE6F1F4FB, 0xFFF1F4FB} : new int[]{0x00FFFFFF, 0xE6FFFFFF, 0xFFFFFFFF})); more.setVisibility(View.GONE);
+        ImageView chip = new ImageView(context); chip.setImageResource(R.drawable.ic_chevron_down); chip.setColorFilter(INK); chip.setScaleType(ImageView.ScaleType.CENTER_INSIDE); chip.setPadding(Math.round(5 * density), Math.round(5 * density), Math.round(5 * density), Math.round(5 * density));
+        chip.setBackground(UiStyle.roundStroke(context, Color.WHITE, 15, 0x1F000000)); chip.setElevation(3 * density);
+        android.widget.FrameLayout.LayoutParams chipParams = new android.widget.FrameLayout.LayoutParams(Math.round(30 * density), Math.round(30 * density), Gravity.CENTER); chipParams.topMargin = Math.round(6 * density); more.addView(chip, chipParams);
         more.setOnClickListener(v -> scroll.smoothScrollBy(0, Math.round(screenH * .3f)));
-        scrollBox.addView(more, new android.widget.FrameLayout.LayoutParams(-1, Math.round(30 * density), Gravity.BOTTOM));
+        scrollBox.addView(more, new android.widget.FrameLayout.LayoutParams(-1, Math.round(44 * density), Gravity.BOTTOM));
         final Runnable checkMore = () -> more.setVisibility(scroll.canScrollVertically(1) ? View.VISIBLE : View.GONE);
         scroll.setOnScrollChangeListener((v, x, y, ox, oy) -> checkMore.run()); scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> checkMore.run()); scroll.post(checkMore);
         card.addView(scrollBox, new LinearLayout.LayoutParams(-1, -2));
         if (shortcuts != null && !shortcuts.isEmpty()) {
-            View line = new View(context); line.setBackgroundColor(LINE); LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Math.max(1, Math.round(density * .5f))); lp.setMargins(Math.round(8 * density), Math.round(4 * density), Math.round(8 * density), Math.round(2 * density)); card.addView(line, lp);
+            card.addView(UiStyle.dottedDivider(context, 8, 4));
             LinearLayout icons = new LinearLayout(context); icons.setGravity(Gravity.CENTER);
             for (final Shortcut s : shortcuts) {
-                ImageButton b = new ImageButton(context); b.setImageResource(s.icon); b.setColorFilter(s.active ? 0xFFF5A623 : 0xFF5856D6); b.setBackgroundColor(Color.TRANSPARENT); b.setContentDescription(s.description); b.setPadding(Math.round(10 * density), Math.round(10 * density), Math.round(10 * density), Math.round(10 * density)); b.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                ImageButton b = new ImageButton(context); b.setImageResource(s.icon); b.setColorFilter(s.active ? 0xFFF5A623 : INK); b.setBackgroundColor(Color.TRANSPARENT); b.setContentDescription(s.description); b.setPadding(Math.round(10 * density), Math.round(10 * density), Math.round(10 * density), Math.round(10 * density)); b.setScaleType(ImageView.ScaleType.FIT_CENTER);
                 b.setOnClickListener(v -> { if (holder[0] != null) holder[0].dismiss(); s.action.run(); });
                 icons.addView(b, new LinearLayout.LayoutParams(0, Math.round(44 * density), 1));
             }
