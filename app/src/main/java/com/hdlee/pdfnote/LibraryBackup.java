@@ -41,11 +41,27 @@ final class LibraryBackup {
     }
 
     /** assetDirs: images, recordings, videos (in that order). Returns the number of documents written. */
-    static int write(Context c, LibraryRepository lib, File[] assetDirs, OutputStream out, Progress p) throws Exception {
-        List<String> docs = new ArrayList<>(), folders = new ArrayList<>(); collect(lib, lib.root, "", docs, folders);
+    static int write(Context c, LibraryRepository lib, File[] assetDirs, OutputStream out, Progress p) throws Exception { return write(c, lib, null, assetDirs, out, p); }
+
+    /** Documents (and sub folders) of one folder of the library; null or the library root backs up everything. Paths stay relative to the library root, so a restore puts them back in the same folder. */
+    static int write(Context c, LibraryRepository lib, File scope, File[] assetDirs, OutputStream out, Progress p) throws Exception {
+        List<String> docs = new ArrayList<>(), folders = new ArrayList<>();
+        final boolean whole = scope == null || scope.equals(lib.root);
+        if (whole) collect(lib, lib.root, "", docs, folders);
+        else {
+            String base = scope.getAbsolutePath().substring(lib.root.getAbsolutePath().length()).replace(File.separatorChar, '/');
+            if (base.startsWith("/")) base = base.substring(1);
+            if (base.isEmpty() || !scope.isDirectory()) throw new IOException("백업할 폴더를 찾을 수 없습니다");
+            folders.add(base); collect(lib, scope, base + "/", docs, folders);
+        }
         Map<Integer, File> templates = new HashMap<>();
         List<File> assets = new ArrayList<>();
-        for (File d : assetDirs) { File[] l = d.listFiles(); if (l != null) for (File f : l) if (f.isFile() && DeviceSync.ASSET.matcher(f.getName()).matches()) assets.add(f); }
+        java.util.Set<String> used = null;
+        if (!whole) {   // a folder backup carries only the pictures, recordings and videos its own documents use
+            used = new java.util.HashSet<>();
+            for (String rel : docs) { AnnotationStore st = new AnnotationStore(c); st.open(Uri.fromFile(new File(lib.root, rel))); for (AnnotationStore.PageElement e : st.elements) { used.add(e.asset); used.add(e.text); } }
+        }
+        for (File d : assetDirs) { File[] l = d.listFiles(); if (l != null) for (File f : l) if (f.isFile() && DeviceSync.ASSET.matcher(f.getName()).matches() && (used == null || used.contains(f.getName()))) assets.add(f); }
         JSONObject m = new JSONObject().put("format", FORMAT).put("created", System.currentTimeMillis()).put("app", "android");
         JSONArray da = new JSONArray(), fa = new JSONArray(), aa = new JSONArray();
         for (int i = 0; i < docs.size(); i++) {

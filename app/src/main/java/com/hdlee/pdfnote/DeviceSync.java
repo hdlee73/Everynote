@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 
 /**
  * Tiny LAN server for device-to-device sync (no cloud, no automatic sync): while the "다른 기기와 동기화" card is open, the Windows app
- * on the same Wi-Fi can list the document library, download / upload whole documents (PDF + notes JSON) and the referenced images /
+ * on the same network (Wi-Fi, hotspot or USB tethering) can list the document library, download / upload whole documents (PDF + notes JSON) and the referenced images /
  * recordings. Documents are identified by their library-relative path. Every request needs the 6-digit code shown on the card.
  */
 final class DeviceSync {
@@ -69,22 +69,34 @@ final class DeviceSync {
     }
 
     /** The phone's address on the local network (Wi-Fi first), or null when not connected. */
-    static String localAddress() {
-        String found = null;
+    static String localAddress() { List<String> all = localAddresses(); return all.isEmpty() ? null : all.get(0); }
+
+    /**
+     * Every private IPv4 address this phone has on a local network, best first: Wi-Fi, then hotspot / USB / Ethernet tethering links
+     * (rndis, usb, ncm, eth, ap, swlan), then anything else private. Mobile-data links (rmnet, ccmni, ...) are left out because
+     * carrier-grade NAT addresses look private but cannot be reached from another device.
+     */
+    static List<String> localAddresses() {
+        java.util.TreeMap<Integer, List<String>> byRank = new java.util.TreeMap<>();
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!ni.isUp() || ni.isLoopback()) continue;
+                String name = ni.getName().toLowerCase(java.util.Locale.ROOT);
+                if (name.startsWith("rmnet") || name.startsWith("ccmni") || name.startsWith("pdp") || name.startsWith("v4-") || name.startsWith("tun") || name.startsWith("dummy") || name.startsWith("data")) continue;
+                int rank = name.startsWith("wlan") ? 0 : (name.startsWith("rndis") || name.startsWith("usb") || name.startsWith("ncm") || name.startsWith("eth") || name.startsWith("ap") || name.startsWith("swlan")) ? 1 : 2;
                 Enumeration<InetAddress> addresses = ni.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     InetAddress a = addresses.nextElement();
                     if (a instanceof Inet4Address && a.isSiteLocalAddress()) {
-                        if (ni.getName().startsWith("wlan")) return a.getHostAddress();
-                        if (found == null) found = a.getHostAddress();
+                        List<String> list = byRank.get(rank); if (list == null) { list = new java.util.ArrayList<>(); byRank.put(rank, list); }
+                        if (!list.contains(a.getHostAddress())) list.add(a.getHostAddress());
                     }
                 }
             }
         } catch (SocketException ignored) { }
-        return found;
+        List<String> out = new java.util.ArrayList<>();
+        for (List<String> list : byRank.values()) out.addAll(list);
+        return out;
     }
 
     // ------------------------------------------------------------------------------------------------ HTTP

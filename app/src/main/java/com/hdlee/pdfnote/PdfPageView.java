@@ -319,7 +319,7 @@ final class PdfPageView extends View {
         invalidate();
     }
 
-    void setInkPen(int pen) { inkPen = Math.max(0, Math.min(5, pen)); }
+    void setInkPen(int pen) { inkPen = Math.max(0, Math.min(6, pen)); }
     void setInkTool(int mode, int color, float width) {
         inkMode=mode; inkColor=color; inkWidth=width;
         if(mode!=0){setLassoMode(false);highlightMode=memoMode=outlineMode=false;}
@@ -647,6 +647,21 @@ final class PdfPageView extends View {
         suppressSelection=true;try{onDraw(canvas);}catch(RuntimeException error){capture.recycle();throw error;}finally{suppressSelection=false;}
         return capture;
     }
+    /** Inserted objects (typed text, pictures, shapes, tables, stickers...) whose centre lies inside the lasso on this page. */
+    List<AnnotationStore.PageElement> lassoElements(){
+        List<AnnotationStore.PageElement> out=new ArrayList<>();
+        if(annotationStore==null||bitmap==null||!validLasso(contentRect()))return out;
+        for(AnnotationStore.PageElement e:annotationStore.elements){
+            if(e.page!=page||e.kind.equals("hyperlink")||e.kind.equals("audio"))continue;
+            if(insideLasso((e.left+e.right)/2f,(e.top+e.bottom)/2f))out.add(e);
+        }
+        return out;
+    }
+    private boolean insideLasso(float x,float y){
+        boolean in=false;int n=lassoPoints.size();
+        for(int i=0,j=n-1;i<n;j=i++){PointF a=lassoPoints.get(i),b=lassoPoints.get(j);if((a.y>y)!=(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)in=!in;}
+        return in;
+    }
     String lassoText(){
         if(lassoPoints.size()<3)return "";android.graphics.Region region=new android.graphics.Region();region.setPath(lassoPath(new RectF(0,0,10000,10000)),new android.graphics.Region(0,0,10000,10000));
         StringBuilder text=new StringBuilder();RectF previousLine=null;
@@ -824,7 +839,9 @@ final class PdfPageView extends View {
         if(eraserPartial)for(int i=strokes.size()-1;i>=0;i--){AnnotationStore.InkStroke s=strokes.get(i);if(s.page!=page)continue;List<AnnotationStore.InkStroke> rest=cutStroke(s,dest,ex,ey,r);if(rest==null)continue;strokes.remove(i);strokes.addAll(i,rest);changed=true;}
         else for(int i=strokes.size()-1;i>=0;i--){AnnotationStore.InkStroke s=strokes.get(i);if(s.page!=page)continue;float reach=r+s.width*dest.width()/2f;for(AnnotationStore.InkPoint p:s.points)if(Math.hypot(dest.left+p.x*dest.width()-ex,dest.top+p.y*dest.height()-ey)<=reach){strokes.remove(i);changed=true;break;}}
         if(marks!=null)for(int i=marks.size()-1;i>=0;i--){AnnotationStore.Mark m=marks.get(i);if(m.page!=page||m.noteOnly)continue;float l=dest.left+m.left*dest.width(),t=dest.top+m.top*dest.height(),rr=dest.left+m.right*dest.width(),b=dest.top+m.bottom*dest.height();float nx=Math.max(l,Math.min(rr,ex)),ny=Math.max(t,Math.min(b,ey));if(Math.hypot(nx-ex,ny-ey)<=r){marks.remove(i);changed=true;}}
-        if(changed)listener.onInkChanged();invalidate();}
+        if(changed)eraseDirty=true;invalidate();}
+    /** Something was erased during the current eraser gesture; saved once when the pen lifts so a whole swipe is a single undo step. */
+    private boolean eraseDirty;
 
     private float touchSlop(){return Math.max(14*getResources().getDisplayMetrics().density,android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop()*1.5f);}
     private float swipeDistance(){return Math.max(48*getResources().getDisplayMetrics().density,Math.min((verticalPageSwipe?getHeight():getWidth())*.1f,100*getResources().getDisplayMetrics().density));}
@@ -885,7 +902,7 @@ final class PdfPageView extends View {
             if(action==MotionEvent.ACTION_UP&&lassoDrawing){if(lassoShape==LASSO_FREE)addLassoPoint(e.getX(),e.getY(),dest);else updateLassoShape(e.getX(),e.getY(),dest);lassoDrawing=false;getParent().requestDisallowInterceptTouchEvent(false);if(validLasso(dest))listener.onLassoSelectionFinished();else clearLassoSelection();invalidate();return true;}
             return true;
         }
-        if(inkMode!=0&&(stylus||fingerInk)&&(e.getPointerCount()==1||stylusDrawing&&stylus)&&!scalingOccurred){int action=e.getActionMasked();boolean erase=inkMode==2||temporaryEraser(e);if(action==MotionEvent.ACTION_DOWN){getParent().requestDisallowInterceptTouchEvent(true);stylusDrawing=true;if(erase)eraseAt(e,dest);else if(dest.contains(e.getX(),e.getY())){activeStroke=new AnnotationStore.InkStroke();activeStroke.page=page;activeStroke.color=inkColor;activeStroke.width=inkWidth;activeStroke.pen=inkPen;addInkPoint(e,dest);if(strokes!=null)strokes.add(activeStroke);}invalidate();return true;}if(action==MotionEvent.ACTION_MOVE&&stylusDrawing){if(erase)eraseAt(e,dest);else{for(int i=0;inkMode!=3&&i<e.getHistorySize();i++){float p=stylus?Math.max(0.05f,Math.min(1f,e.getHistoricalPressure(i))):0.65f;pushInkPoint(e.getHistoricalX(i),e.getHistoricalY(i),p,dest,false);}addInkPoint(e,dest);}invalidate();return true;}if((action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)&&stylusDrawing){if(!erase&&activeStroke!=null){if(action==MotionEvent.ACTION_CANCEL){if(strokes!=null)strokes.remove(activeStroke);}else{pushInkPoint(e.getX(),e.getY(),inputPressure(e),dest,true);if(!activeStroke.points.isEmpty())listener.onInkChanged();}}activeStroke=null;stylusDrawing=false;eraserX=eraserY=-1;getParent().requestDisallowInterceptTouchEvent(false);invalidate();return true;}}
+        if(inkMode!=0&&(stylus||fingerInk)&&(e.getPointerCount()==1||stylusDrawing&&stylus)&&!scalingOccurred){int action=e.getActionMasked();boolean erase=inkMode==2||temporaryEraser(e);if(action==MotionEvent.ACTION_DOWN){getParent().requestDisallowInterceptTouchEvent(true);stylusDrawing=true;if(erase)eraseAt(e,dest);else if(dest.contains(e.getX(),e.getY())){activeStroke=new AnnotationStore.InkStroke();activeStroke.page=page;activeStroke.color=inkColor;activeStroke.width=inkWidth;activeStroke.pen=inkPen;addInkPoint(e,dest);if(strokes!=null)strokes.add(activeStroke);}invalidate();return true;}if(action==MotionEvent.ACTION_MOVE&&stylusDrawing){if(erase)eraseAt(e,dest);else{for(int i=0;inkMode!=3&&i<e.getHistorySize();i++){float p=stylus?Math.max(0.05f,Math.min(1f,e.getHistoricalPressure(i))):0.65f;pushInkPoint(e.getHistoricalX(i),e.getHistoricalY(i),p,dest,false);}addInkPoint(e,dest);}invalidate();return true;}if((action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)&&stylusDrawing){if(erase&&eraseDirty){eraseDirty=false;listener.onInkChanged();}if(!erase&&activeStroke!=null){if(action==MotionEvent.ACTION_CANCEL){if(strokes!=null)strokes.remove(activeStroke);}else{pushInkPoint(e.getX(),e.getY(),inputPressure(e),dest,true);if(!activeStroke.points.isEmpty())listener.onInkChanged();}}activeStroke=null;stylusDrawing=false;eraserX=eraserY=-1;getParent().requestDisallowInterceptTouchEvent(false);invalidate();return true;}}
         if (e.getAction() == MotionEvent.ACTION_DOWN) {
             listener.onSelectionAdjustStarted();
             selectionHandler.removeCallbacks(beginTextSelection);

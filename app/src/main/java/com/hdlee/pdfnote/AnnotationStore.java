@@ -98,12 +98,12 @@ final class AnnotationStore {
 
     static final class InkStroke {
         int page, color;
-        /** 0 ballpoint, 1 pencil, 2 fountain pen, 3 brush, 4 felt marker, 5 highlighter. */
+        /** 0 ballpoint, 1 pencil, 2 fountain pen, 3 brush, 4 felt marker, 5 highlighter, 6 tape. */
         int pen;
         float width;
         final List<InkPoint> points=new ArrayList<>();
         JSONObject toJson() throws JSONException { JSONObject o=new JSONObject().put("page",page).put("color",color).put("width",width).put("pen",pen);JSONArray a=new JSONArray();for(InkPoint p:points)a.put(p.toJson());return o.put("points",a); }
-        static InkStroke fromJson(JSONObject o) throws JSONException { InkStroke s=new InkStroke();s.page=o.optInt("page");s.color=o.optInt("color",0xFF1C1C1E);s.width=(float)o.optDouble("width",0.004);s.pen=Math.max(0,Math.min(5,o.optInt("pen",0)));JSONArray a=o.optJSONArray("points");if(a!=null)for(int i=0;i<a.length();i++)s.points.add(InkPoint.fromJson(a.getJSONObject(i)));return s; }
+        static InkStroke fromJson(JSONObject o) throws JSONException { InkStroke s=new InkStroke();s.page=o.optInt("page");s.color=o.optInt("color",0xFF1C1C1E);s.width=(float)o.optDouble("width",0.004);s.pen=Math.max(0,Math.min(6,o.optInt("pen",0)));JSONArray a=o.optJSONArray("points");if(a!=null)for(int i=0;i<a.length();i++)s.points.add(InkPoint.fromJson(a.getJSONObject(i)));return s; }
     }
 
     static final class TranslationNote {
@@ -263,48 +263,116 @@ final class AnnotationStore {
                 java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;
                 while((n=in.read(buffer))!=-1)out.write(buffer,0,n);json=out.toString("UTF-8");
             }catch(java.io.IOException ignored){}
-            JSONObject root = new JSONObject(json);
-            JSONArray els=root.optJSONArray("elements");if(els!=null)for(int i=0;i<els.length();i++)elements.add(PageElement.fromJson(els.getJSONObject(i)));
-            JSONArray entries=root.optJSONArray("studyEntries");
-            if(entries!=null)for(int i=0;i<entries.length();i++)studyEntries.add(StudyEntry.fromJson(entries.getJSONObject(i)));
-            JSONArray a = root.optJSONArray("marks");
-            if (a != null) for (int i = 0; i < a.length(); i++) marks.add(Mark.fromJson(a.getJSONObject(i)));
-            JSONArray b = root.optJSONArray("bookmarks");
-            if (b != null) for (int i = 0; i < b.length(); i++) bookmarks.add(b.getInt(i));
-            JSONArray o = root.optJSONArray("outlines");
-            if (o != null) for (int i = 0; i < o.length(); i++) outlines.add(OutlineItem.fromJson(o.getJSONObject(i)));
-            JSONArray s = root.optJSONArray("strokes");
-            if (s != null) for (int i = 0; i < s.length(); i++) strokes.add(InkStroke.fromJson(s.getJSONObject(i)));
-            JSONArray t = root.optJSONArray("translations");
-            if (t != null) for (int i = 0; i < t.length(); i++) translations.add(TranslationNote.fromJson(t.getJSONObject(i)));
+            loadJson(json);
         } catch (JSONException ignored) { }
+        undo.clear();redo.clear();historyChars=0;
+        try{current=toJsonString();}catch(JSONException error){current=null;}
+    }
+
+    /** Replaces everything held by this store with the saved JSON (the lists stay the same objects, so views keep working). */
+    private void loadJson(String json) throws JSONException {
+        marks.clear();bookmarks.clear();outlines.clear();strokes.clear();translations.clear();studyEntries.clear();elements.clear();
+        JSONObject root = new JSONObject(json);
+        JSONArray els=root.optJSONArray("elements");if(els!=null)for(int i=0;i<els.length();i++)elements.add(PageElement.fromJson(els.getJSONObject(i)));
+        JSONArray entries=root.optJSONArray("studyEntries");
+        if(entries!=null)for(int i=0;i<entries.length();i++)studyEntries.add(StudyEntry.fromJson(entries.getJSONObject(i)));
+        JSONArray a = root.optJSONArray("marks");
+        if (a != null) for (int i = 0; i < a.length(); i++) marks.add(Mark.fromJson(a.getJSONObject(i)));
+        JSONArray b = root.optJSONArray("bookmarks");
+        if (b != null) for (int i = 0; i < b.length(); i++) bookmarks.add(b.getInt(i));
+        JSONArray o = root.optJSONArray("outlines");
+        if (o != null) for (int i = 0; i < o.length(); i++) outlines.add(OutlineItem.fromJson(o.getJSONObject(i)));
+        JSONArray s = root.optJSONArray("strokes");
+        if (s != null) for (int i = 0; i < s.length(); i++) strokes.add(InkStroke.fromJson(s.getJSONObject(i)));
+        JSONArray t = root.optJSONArray("translations");
+        if (t != null) for (int i = 0; i < t.length(); i++) translations.add(TranslationNote.fromJson(t.getJSONObject(i)));
+    }
+
+    // ---- undo / redo of every kind of edit: each save keeps the previous saved state, so any change (ink, highlights, memos, typed text, shapes, pictures, moves, deletions...) can be taken back
+    private static final int MAX_HISTORY = 40;
+    private static final long MAX_HISTORY_CHARS = 16L * 1024 * 1024;
+    private final java.util.ArrayDeque<String> undo = new java.util.ArrayDeque<>(), redo = new java.util.ArrayDeque<>();
+    private String current;
+    private long historyChars;
+    private Runnable historyListener;
+    /** Called after every save, undo and redo (to refresh the undo / redo buttons). */
+    void setHistoryListener(Runnable listener) { historyListener = listener; }
+    boolean canUndo() { return !undo.isEmpty(); }
+    boolean canRedo() { return !redo.isEmpty(); }
+    /** Forget the history (after the page list changed, when old snapshots would no longer fit the document). */
+    void clearHistory() { undo.clear(); redo.clear(); historyChars = 0; try { current = toJsonString(); } catch (JSONException error) { current = null; } notifyHistory(); }
+    private void notifyHistory() { if (historyListener != null) historyListener.run(); }
+    private void remember(String json) {
+        if (current != null && !current.equals(json)) {
+            undo.addLast(current); historyChars += current.length(); redo.clear();
+            while (undo.size() > MAX_HISTORY || (historyChars > MAX_HISTORY_CHARS && undo.size() > 1)) historyChars -= undo.removeFirst().length();
+        }
+        current = json;
+    }
+    /** Steps back one edit. Returns the page the edit touched (or 0 when unknown), or -1 when there is nothing to undo. */
+    int undo() { return step(undo, redo); }
+    /** Steps forward again. Returns the page the edit touched (or 0 when unknown), or -1 when there is nothing to redo. */
+    int redo() { return step(redo, undo); }
+    private int step(java.util.ArrayDeque<String> from, java.util.ArrayDeque<String> to) {
+        if (from.isEmpty() || current == null) return -1;
+        String target = from.removeLast(); historyChars = Math.max(0, historyChars - (from == undo ? target.length() : 0));
+        int page = changedPage(current, target);
+        try { loadJson(target); } catch (JSONException error) { from.addLast(target); return -1; }
+        to.addLast(current); if (to == undo) historyChars += current.length();
+        current = target; persist(target); notifyHistory();
+        return Math.max(0, page);
+    }
+    /** The first page whose annotations differ between two saved states, or -1 when only page-less data differs. */
+    static int changedPage(String a, String b) {
+        try {
+            JSONObject x = new JSONObject(a), y = new JSONObject(b); int best = -1;
+            for (String key : new String[]{"marks", "strokes", "elements", "translations", "outlines", "studyEntries"}) {
+                java.util.Map<String, Integer> count = new java.util.HashMap<>(); java.util.Map<String, Integer> pageOf = new java.util.HashMap<>();
+                JSONArray p = x.optJSONArray(key), q = y.optJSONArray(key);
+                if (p != null) for (int i = 0; i < p.length(); i++) { JSONObject o = p.getJSONObject(i); String k = o.toString(); count.merge(k, 1, Integer::sum); pageOf.put(k, o.optInt("page", 0)); }
+                if (q != null) for (int i = 0; i < q.length(); i++) { JSONObject o = q.getJSONObject(i); String k = o.toString(); count.merge(k, -1, Integer::sum); pageOf.put(k, o.optInt("page", 0)); }
+                for (java.util.Map.Entry<String, Integer> e : count.entrySet()) if (e.getValue() != 0) { int pg = pageOf.get(e.getKey()); if (best < 0 || pg < best) best = pg; }
+            }
+            return best;
+        } catch (JSONException error) { return -1; }
+    }
+
+    private String toJsonString() throws JSONException {
+        JSONObject root = new JSONObject();
+        JSONArray a = new JSONArray();
+        for (Mark m : marks) a.put(m.toJson());
+        JSONArray b = new JSONArray();
+        for (int page : bookmarks) b.put(page);
+        JSONArray o = new JSONArray();
+        for (OutlineItem item : outlines) o.put(item.toJson());
+        JSONArray s = new JSONArray();
+        for (InkStroke stroke : strokes) s.put(stroke.toJson());
+        JSONArray t = new JSONArray();
+        for (TranslationNote note : translations) t.put(note.toJson());
+        JSONArray entries=new JSONArray();for(StudyEntry e:studyEntries)entries.put(e.toJson());
+        JSONArray els=new JSONArray();for(PageElement e:elements)els.put(e.toJson());
+        root.put("elements",els).put("studyEntries",entries).put("marks", a).put("bookmarks", b).put("outlines", o).put("strokes", s).put("translations",t);
+        return root.toString();
     }
 
     void save() {
         if (key == null) return;
         try {
-            JSONObject root = new JSONObject();
-            JSONArray a = new JSONArray();
-            for (Mark m : marks) a.put(m.toJson());
-            JSONArray b = new JSONArray();
-            for (int page : bookmarks) b.put(page);
-            JSONArray o = new JSONArray();
-            for (OutlineItem item : outlines) o.put(item.toJson());
-            JSONArray s = new JSONArray();
-            for (InkStroke stroke : strokes) s.put(stroke.toJson());
-            JSONArray t = new JSONArray();
-            for (TranslationNote note : translations) t.put(note.toJson());
-            JSONArray entries=new JSONArray();for(StudyEntry e:studyEntries)entries.put(e.toJson());
-        JSONArray els=new JSONArray();for(PageElement e:elements)els.put(e.toJson());
-        root.put("elements",els).put("studyEntries",entries).put("marks", a).put("bookmarks", b).put("outlines", o).put("strokes", s).put("translations",t);
-            String json=root.toString();
-            if(!sidecarDirectory.isDirectory())sidecarDirectory.mkdirs();
-            android.util.AtomicFile file=new android.util.AtomicFile(new java.io.File(sidecarDirectory,key+".json"));
-            java.io.FileOutputStream out=null;
-            try{out=file.startWrite();out.write(json.getBytes(StandardCharsets.UTF_8));file.finishWrite(out);}
-            catch(java.io.IOException error){if(out!=null)file.failWrite(out);prefs.edit().putString(key,json).apply();return;}
-            prefs.edit().remove(key).apply();
+            String json = toJsonString();
+            remember(json);
+            persist(json);
+            notifyHistory();
         } catch (JSONException ignored) { }
+    }
+
+    private void persist(String json) {
+        if(key==null)return;
+        if(!sidecarDirectory.isDirectory())sidecarDirectory.mkdirs();
+        android.util.AtomicFile file=new android.util.AtomicFile(new java.io.File(sidecarDirectory,key+".json"));
+        java.io.FileOutputStream out=null;
+        try{out=file.startWrite();out.write(json.getBytes(StandardCharsets.UTF_8));file.finishWrite(out);}
+        catch(java.io.IOException error){if(out!=null)file.failWrite(out);prefs.edit().putString(key,json).apply();return;}
+        prefs.edit().remove(key).apply();
     }
 
     String exportJson(Uri uri, String title) throws JSONException {

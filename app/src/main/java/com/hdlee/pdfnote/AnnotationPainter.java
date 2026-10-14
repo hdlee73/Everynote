@@ -126,6 +126,8 @@ final class AnnotationPainter {
     static final String[] PEN_NAMES={"볼펜","연필","만년필","붓","사인펜"};
     /** The ink highlighter (형광펜) pen id: a freehand or straight translucent band of constant width. */
     static final int HIGHLIGHTER=5;
+    /** The tape pen id: a wide, flat, translucent ribbon with a lighter strip down its middle (masking tape); like the highlighter it has no pressure. */
+    static final int TAPE=6;
     /** Smoothed copy of a stroke's points used for drawing (v1.54.0): raw digitizer samples are jittery and sparse at speed, so straight segments through them gave wrinkled letters and angular curves. Light 1-2-1 smoothing of position (not at sharp corners) and pressure, then a Catmull-Rom spline subdivided finely. Page-normalized, cached per stroke until its points change. */
     private static final class Geo{int n;double sx,sy,sp;float[] x,y,p;}
     private static final java.util.WeakHashMap<AnnotationStore.InkStroke,Geo> GEO=new java.util.WeakHashMap<>();
@@ -166,7 +168,7 @@ final class AnnotationPainter {
         if(s.points.isEmpty()||d.width()<=0)return;
         Geo g=geo(s);int n=g.x.length;
         int argb=adj(s.color);float penAlpha=s.pen==1?.78f:s.pen==3?.92f:s.pen==4?.82f:1f;int eff=Math.round(Color.alpha(argb)*penAlpha);
-        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);p.setColor(argb|0xFF000000);p.setStrokeCap(s.pen>=4?Paint.Cap.SQUARE:Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);
+        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);p.setColor(argb|0xFF000000);p.setStrokeCap(s.pen==TAPE?Paint.Cap.BUTT:s.pen>=4?Paint.Cap.SQUARE:Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);
         int save=-1;if(eff<255)save=c.saveLayerAlpha(d.left,d.top,d.right,d.bottom,Math.max(8,eff));
         float base=s.width*d.width();
         float[] px=new float[n],py=new float[n],W=new float[n];
@@ -178,7 +180,7 @@ final class AnnotationPainter {
                 case 2:{double ang=Math.atan2(py[i]-py[a],px[i]-px[a]);double cut=Math.abs(Math.sin(ang+Math.PI/4));w=base*(float)(.32+1.05*cut)*(.65f+pr*.7f);break;}
                 case 3:{float t=n<=1?.5f:i/(float)(n-1);float taper=Math.min(1f,Math.min(t,1f-t)*7f);w=base*2.1f*(.35f+pr*.95f)*(.35f+.65f*taper);break;}
                 case 4:w=base*1.5f;break;
-                case 5:w=base;break;
+                case 5:case 6:w=base;break;
                 default:w=base*(.45f+pr*1.15f);
             }
             W[i]=Math.max(1.5f,w);
@@ -187,6 +189,7 @@ final class AnnotationPainter {
         if(s.pen>=4&&n>1){   // constant width: one path, no overlapping caps
             Path path=new Path();path.moveTo(px[0],py[0]);for(int i=1;i<n;i++)path.lineTo(px[i],py[i]);
             p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(W[0]);c.drawPath(path,p);
+            if(s.pen==TAPE){p.setColor(0xFFFFFFFF);p.setStrokeWidth(W[0]*.42f);p.setAlpha(70);c.drawPath(path,p);}   // glossy strip along the tape
         }else{
             p.setStyle(Paint.Style.FILL);c.drawCircle(px[0],py[0],W[0]/2f,p);p.setStyle(Paint.Style.STROKE);
             for(int i=1;i<n;i++){p.setStrokeWidth((W[i]+W[i-1])/2f);c.drawLine(px[i-1],py[i-1],px[i],py[i],p);}
