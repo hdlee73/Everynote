@@ -103,7 +103,8 @@ final class AnchoredMenu {
                 if (holder[0] != null) holder[0].dismiss(); if (row.action != null) row.action.run(); });
             list.addView(line, new LinearLayout.LayoutParams(-1, -2));
         }
-        ScrollView scroll = new ScrollView(context) { @Override protected void onMeasure(int w, int h) { super.onMeasure(w, MeasureSpec.makeMeasureSpec(Math.round(screenH * .6f), MeasureSpec.AT_MOST)); } };
+        final float maxFraction = mode == 2 ? .86f : .6f;   // centred panels (pen, eraser, text format) may use most of the screen height
+        ScrollView scroll = new ScrollView(context) { @Override protected void onMeasure(int w, int h) { super.onMeasure(w, MeasureSpec.makeMeasureSpec(Math.round(screenH * maxFraction), MeasureSpec.AT_MOST)); } };
         scroll.setVerticalScrollBarEnabled(true); scroll.setScrollbarFadingEnabled(false); scroll.setScrollBarSize(Math.max(2, Math.round(3 * density)));
         if (android.os.Build.VERSION.SDK_INT >= 29) scroll.setVerticalScrollbarThumbDrawable(UiStyle.round(context, 0x55000000, 2));
         scroll.addView(list);

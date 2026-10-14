@@ -25,7 +25,7 @@ import android.widget.TextView;
  */
 final class AlertDialog extends Dialog {
     static final int BUTTON_POSITIVE = DialogInterface.BUTTON_POSITIVE, BUTTON_NEGATIVE = DialogInterface.BUTTON_NEGATIVE, BUTTON_NEUTRAL = DialogInterface.BUTTON_NEUTRAL;
-    private static final int ACCENT = 0xFF007AFF, INK = 0xFF1C1C1E, GRAY = 0xFF8E8E93, LINE = 0xFFE5E5EA;
+    private static final int ACCENT = 0xFF3E6DF0, INK = 0xFF17181C, GRAY = 0xFF8E8E93, LINE = 0xFFE5E5EA;
     private final TextView[] buttons = new TextView[3];
     private final boolean sheet;
     private TextView titleView, messageView;
@@ -107,7 +107,7 @@ final class AlertDialog extends Dialog {
         }
 
         private View card(AlertDialog dialog) {
-            LinearLayout card = new LinearLayout(context); card.setOrientation(LinearLayout.VERTICAL); card.setBackground(round(Color.WHITE, 18)); card.setTag("alert_card");
+            LinearLayout card = new LinearLayout(context); card.setOrientation(LinearLayout.VERTICAL); card.setBackground(round(Color.WHITE, 24)); card.setTag("alert_card");
             LinearLayout body = new LinearLayout(context); body.setOrientation(LinearLayout.VERTICAL); body.setPadding(dp(20), dp(22), dp(20), dp(18));
             if (title != null) { TextView t = new TextView(context); t.setText(title); t.setTextSize(17); t.setTextColor(INK); t.setTypeface(Typeface.DEFAULT_BOLD); t.setGravity(Gravity.CENTER); t.setTextAlignment(View.TEXT_ALIGNMENT_CENTER); t.setTag("dialog_title"); body.addView(t, new LinearLayout.LayoutParams(-1, -2)); dialog.titleView = t; }
             if (message != null) { TextView m = new TextView(context); m.setText(message); m.setTextSize(14); m.setTextColor(0xFF48484A); m.setGravity(Gravity.CENTER); m.setTextAlignment(View.TEXT_ALIGNMENT_CENTER); m.setLineSpacing(0, 1.2f); m.setTag("dialog_message"); LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-1, -2); mp.topMargin = dp(title == null ? 0 : 8); LimitedScroll s = new LimitedScroll(context, Math.round(context.getResources().getDisplayMetrics().heightPixels * .5f)); s.addView(m); body.addView(s, mp); dialog.messageView = m; }
@@ -163,7 +163,7 @@ final class AlertDialog extends Dialog {
         private View sheet(AlertDialog dialog) {
             FrameLayout root = new FrameLayout(context); root.setTag("action_sheet");
             LinearLayout card = new LinearLayout(context); card.setOrientation(LinearLayout.VERTICAL); card.setTag("anchored_menu");
-            GradientDrawable bg = round(Color.WHITE, 18); bg.setStroke(Math.max(1, dp(.5f)), 0x14000000); card.setBackground(bg); card.setPadding(dp(6), dp(6), dp(6), dp(6)); card.setElevation(dp(12));
+            GradientDrawable bg = round(Color.WHITE, 24); bg.setStroke(Math.max(1, dp(.5f)), 0x14000000); card.setBackground(bg); card.setPadding(dp(6), dp(6), dp(6), dp(6)); card.setElevation(dp(12));
             if (title != null) { TextView t = new TextView(context); t.setText(title); t.setTextSize(13); t.setTextColor(GRAY); t.setGravity(Gravity.CENTER_VERTICAL); t.setPadding(dp(12), dp(8), dp(12), dp(6)); t.setTag("dialog_title"); card.addView(t, new LinearLayout.LayoutParams(-1, -2)); }
             if (message != null) { TextView m = new TextView(context); m.setText(message); m.setTextSize(13); m.setTextColor(GRAY); m.setPadding(dp(12), 0, dp(12), dp(8)); card.addView(m, new LinearLayout.LayoutParams(-1, -2)); }
             LinearLayout rows = new LinearLayout(context); rows.setOrientation(LinearLayout.VERTICAL);
