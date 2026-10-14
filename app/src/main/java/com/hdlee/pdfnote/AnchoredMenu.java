@@ -88,15 +88,15 @@ final class AnchoredMenu {
             list.addView(line, new LinearLayout.LayoutParams(-1, -2));
         }
         ScrollView scroll = new ScrollView(context) { @Override protected void onMeasure(int w, int h) { super.onMeasure(w, MeasureSpec.makeMeasureSpec(Math.round(screenH * .6f), MeasureSpec.AT_MOST)); } };
-        scroll.setVerticalScrollBarEnabled(false); scroll.addView(list);
+        scroll.setVerticalScrollBarEnabled(true); scroll.setScrollbarFadingEnabled(false); scroll.setScrollBarSize(Math.round(3 * density)); scroll.addView(list);   // a thin bar on the right shows there is more to scroll
         android.widget.FrameLayout scrollBox = new android.widget.FrameLayout(context); scrollBox.addView(scroll, new android.widget.FrameLayout.LayoutParams(-1, -2));
         // more rows below the visible part: a fading strip with a double chevron (⌄⌄) that disappears at the end of the list
-        final ImageView more = new ImageView(context); more.setImageResource(R.drawable.ic_chevron_double_down); more.setColorFilter(ACCENT); more.setScaleType(ImageView.ScaleType.CENTER_INSIDE); more.setPadding(0, Math.round(5 * density), 0, Math.round(3 * density)); more.setTag("menu_more"); more.setContentDescription("아래에 더 있음");
-        more.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0x00FFFFFF, 0xF2FFFFFF, 0xFFFFFFFF})); more.setVisibility(View.GONE);
+        final ImageView more = new ImageView(context); more.setImageResource(R.drawable.ic_chevron_double_down); more.setColorFilter(ACCENT); more.setScaleType(ImageView.ScaleType.CENTER_INSIDE); more.setPadding(0, Math.round(9 * density), 0, Math.round(3 * density)); more.setTag("menu_more"); more.setContentDescription("아래에 더 있음");
+        more.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0x00FFFFFF, 0xE6FFFFFF, 0xFFFFFFFF})); more.setVisibility(View.GONE);
         more.setOnClickListener(v -> scroll.smoothScrollBy(0, Math.round(screenH * .3f)));
-        scrollBox.addView(more, new android.widget.FrameLayout.LayoutParams(-1, Math.round(30 * density), Gravity.BOTTOM));
+        scrollBox.addView(more, new android.widget.FrameLayout.LayoutParams(-1, Math.round(40 * density), Gravity.BOTTOM));
         final Runnable checkMore = () -> more.setVisibility(scroll.canScrollVertically(1) ? View.VISIBLE : View.GONE);
-        scroll.setOnScrollChangeListener((v, x, y, ox, oy) -> checkMore.run()); scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> checkMore.run()); scroll.post(checkMore);
+        scroll.setOnScrollChangeListener((v, x, y, ox, oy) -> checkMore.run()); scroll.getViewTreeObserver().addOnGlobalLayoutListener(checkMore::run); scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> checkMore.run()); scroll.post(checkMore);
         card.addView(scrollBox, new LinearLayout.LayoutParams(-1, -2));
         if (shortcuts != null && !shortcuts.isEmpty()) {
             View line = new View(context); line.setBackgroundColor(LINE); LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Math.max(1, Math.round(density * .5f))); lp.setMargins(Math.round(8 * density), Math.round(4 * density), Math.round(8 * density), Math.round(2 * density)); card.addView(line, lp);

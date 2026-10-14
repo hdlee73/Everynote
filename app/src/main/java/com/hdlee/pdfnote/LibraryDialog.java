@@ -26,6 +26,12 @@ final class LibraryDialog extends Dialog {
         void selectedFolder(File folder);
         default void removed(List<File> files){}
         default void settings(){}
+        /** The shelf was closed with the back button from its top level (not by opening a document). */
+        default void backedOut(){}
+        /** Back up the documents of this folder (the library root = everything) to a ZIP. */
+        default void backupFolder(File folder){}
+        /** Restore documents from a backup ZIP made by backupFolder / the whole-library backup. */
+        default void restoreBackup(){}
     }
     private static final int ALL=0,FAVORITES=1,RECENT=2,FOLDER=3;
     private static final int INK=0xFF1C1C1E,MUTED=0xFF8E8E93,ACCENT=0xFF007AFF,ACTIVE_BG=0xFFE5F0FF,SURFACE=0xFFFFFFFF;
@@ -86,7 +92,7 @@ final class LibraryDialog extends Dialog {
         setOnDismissListener(d->{generation++;previews.shutdownNow();});shelf.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol)shelf.post(this::refreshGrid);});refresh();
     }
     @Override public void show(){super.show();getWindow().setBackgroundDrawableResource(android.R.color.transparent);getWindow().setLayout(-1,-1);getWindow().setStatusBarColor(SURFACE);getWindow().getDecorView().setSystemUiVisibility(getWindow().getDecorView().getSystemUiVisibility()|View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);getWindow().setNavigationBarColor(SURFACE);content.post(this::refreshGrid);}
-    @Override public void onBackPressed(){if(drawer.getVisibility()==View.VISIBLE){closeDrawer();return;}if(selectionMode){selectionMode=false;selected.clear();refreshGrid();return;}if(searchRow.getVisibility()==View.VISIBLE){toggleSearch();return;}if(mode==FOLDER&&!folder.equals(repository.root)){selectFolder(folder.getParentFile());return;}dismiss();}
+    @Override public void onBackPressed(){if(drawer.getVisibility()==View.VISIBLE){closeDrawer();return;}if(selectionMode){selectionMode=false;selected.clear();refreshGrid();return;}if(searchRow.getVisibility()==View.VISIBLE){toggleSearch();return;}if(mode==FOLDER&&!folder.equals(repository.root)){selectFolder(folder.getParentFile());return;}actions.backedOut();dismiss();}
 
     // ---------------------------------------------------------------- layout
     private void buildRail(LinearLayout main){
@@ -280,7 +286,7 @@ final class LibraryDialog extends Dialog {
     }
     private void libraryMenu(View anchor){
         PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add(0,1,0,"선택");menu.getMenu().add(0,2,1,"보기 방법");menu.getMenu().add(0,3,2,"정렬");menu.getMenu().add(0,4,3,(repository.pinFavorites()?"✓  ":"")+"즐겨찾기 맨 위 고정");
-        if(mode==FOLDER)menu.getMenu().add(0,5,4,"폴더 색상");menu.getMenu().add(0,6,5,"휴지통");menu.getMenu().add(0,7,6,"설정");
+        if(mode==FOLDER)menu.getMenu().add(0,5,4,"폴더 색상");menu.getMenu().add(0,6,5,"휴지통");menu.getMenu().add(0,8,6,mode==FOLDER&&!folder.equals(repository.root)?"이 폴더 백업":"모든 문서 백업");menu.getMenu().add(0,9,7,"백업 복원");menu.getMenu().add(0,7,8,"설정");
         menu.setOnMenuItemClickListener(item->{switch(item.getItemId()){
             case 1:selectionMode=!selectionMode;selected.clear();refreshGrid();break;
             case 2:new AlertDialog.Builder(activity).setTitle("보기 방법").setSingleChoiceItems(LibraryRepository.VIEW_NAMES,repository.viewMode(),(d,index)->{repository.viewMode(index);d.dismiss();refreshGrid();}).show();break;
@@ -288,9 +294,13 @@ final class LibraryDialog extends Dialog {
             case 4:repository.pinFavorites(!repository.pinFavorites());refreshGrid();break;
             case 5:chooseFolderColor(folder);break;
             case 7:actions.settings();break;
+            case 8:actions.backupFolder(mode==FOLDER?folder:repository.root);break;
+            case 9:actions.restoreBackup();break;
             default:showTrash();}return true;});menu.show();
     }
-    private void folderMenu(File target,View anchor){PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add("폴더 색상");menu.getMenu().add("하위 폴더 만들기");menu.setOnMenuItemClickListener(item->{if(item.getTitle().equals("폴더 색상"))chooseFolderColor(target);else createFolder(target,()->{tree.reload();refresh();});return true;});menu.show();}
+    /** Reloads the folder tree and the list (after documents were restored). */
+    void reload(){if(tree!=null)tree.reload();refresh();}
+    private void folderMenu(File target,View anchor){PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add("폴더 색상");menu.getMenu().add("하위 폴더 만들기");menu.getMenu().add("이 폴더 백업");menu.setOnMenuItemClickListener(item->{if(item.getTitle().equals("폴더 색상"))chooseFolderColor(target);else if(item.getTitle().equals("이 폴더 백업"))actions.backupFolder(target);else createFolder(target,()->{tree.reload();refresh();});return true;});menu.show();}
     private void folderManageMenu(View anchor){PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add("폴더 만들기");menu.getMenu().add("선택한 폴더 색상");menu.setOnMenuItemClickListener(item->{File target=tree.selected();if(item.getTitle().equals("폴더 만들기"))createFolder(target,()->{tree.reload();refresh();});else chooseFolderColor(target);return true;});menu.show();}
     private void chooseFolderColor(File target){int current=0;for(int i=0;i<LibraryRepository.FOLDER_COLORS.length;i++)if(LibraryRepository.FOLDER_COLORS[i]==repository.folderColor(target))current=i;
         new AlertDialog.Builder(activity).setTitle("폴더 색상 · "+(target.equals(repository.root)?"문서함":target.getName())).setSingleChoiceItems(LibraryRepository.FOLDER_COLOR_NAMES,current,(d,index)->{repository.folderColor(target,LibraryRepository.FOLDER_COLORS[index]);d.dismiss();tree.reload();refreshGrid();}).setNegativeButton("취소",null).show();}
