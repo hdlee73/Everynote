@@ -109,7 +109,6 @@ final class LibraryDialog extends Dialog {
     }
     private void buildTopBar(){
         LinearLayout bar=new LinearLayout(activity);topBar=bar;bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(6),dp(4),dp(6),0);
-        bar.addView(icon(R.drawable.ic_chevron_left,"문서함 닫기",v->dismiss()),new LinearLayout.LayoutParams(dp(48),dp(52)));
         if(!wide){menuButton=icon(R.drawable.ic_menu,"폴더 트리 보기",v->openDrawer());bar.addView(menuButton,new LinearLayout.LayoutParams(dp(48),dp(52)));}
         bar.addView(new View(activity),new LinearLayout.LayoutParams(0,1,1));
         bar.addView(icon(R.drawable.ic_search,"문서 이름 검색",v->toggleSearch()),new LinearLayout.LayoutParams(dp(48),dp(52)));
