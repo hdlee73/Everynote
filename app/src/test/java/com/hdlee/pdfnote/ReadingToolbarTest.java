@@ -37,25 +37,26 @@ public class ReadingToolbarTest {
         View root=field("root");layout(root,360,720);View bar=root.findViewWithTag("reading_toolbar");TextView page=root.findViewWithTag("page_indicator");
         assertEquals(54,bar.getLayoutParams().height-bar.getPaddingBottom());assertEquals(64,page.getLayoutParams().width);assertTrue(page.getLayoutParams().width<bar.getWidth()/3);
         assertNull("문서 개요는 페이지 이동 메뉴로 옮겼습니다",description(bar,"문서 개요"));
-        for(String name:new String[]{"보기 방법","읽기 모드","필기 모드","타이핑","올가미 선택","하단 메뉴 위치·방향"})assertNotNull(name,description(bar,name));
-        assertTrue("즐겨찾기",description(bar,"즐겨찾기")!=null||description(bar,"즐겨찾기 추가")!=null||description(bar,"즐겨찾기 해제")!=null);
+        for(String name:new String[]{"홈 · 문서함","보기 · 이동","필기","삽입 · 메모 사진 스티커 도형 표","도구 · 설정","하단 메뉴 위치·방향"})assertNotNull(name,description(bar,name));
+        assertNull("즐겨찾기는 도구 메뉴에 있습니다",description(bar,"즐겨찾기"));assertNull("타이핑은 삽입 메뉴에 있습니다",description(bar,"타이핑"));assertNull("올가미는 삽입 메뉴에 있습니다",description(bar,"올가미 선택"));
         assertNull("메모는 삽입 메뉴 안에 있습니다",description(bar,"메모"));
         invoke("showOutlineList");View side=root.findViewWithTag("side_panel");assertEquals("개요는 미리보기 패널의 탭으로 열립니다",View.VISIBLE,side.getVisibility());assertNotNull(root.findViewWithTag("outline_add"));invoke("showOutlineList");assertEquals(View.GONE,side.getVisibility());
-        description(bar,"보기 방법").performClick();assertNotNull(description(bar,"타이핑"));assertNull("하단 막대에는 한글 글자가 없습니다",firstText(bar));
+        description(bar,"보기 · 이동").performClick();assertNull("타이핑은 삽입 메뉴에 있습니다",description(bar,"타이핑"));assertNull("하단 막대에는 한글 글자가 없습니다",firstText(bar));
         page.performClick();screenshot(root,"reading-toolbar.png");
     }
     @Test public void writingToolsFloatAsAStripThatCanBeHidden()throws Exception{
         View root=field("root");layout(root,360,720);View bar=root.findViewWithTag("reading_toolbar"),read=root.findViewWithTag("read_bar"),write=root.findViewWithTag("write_strip_box");View strip=write;
         assertEquals(View.VISIBLE,read.getVisibility());assertEquals(View.GONE,strip.getVisibility());assertNull("필기 도구는 하단 막대 밖에 있습니다",description(bar,"펜"));
-        description(bar,"필기 모드").performClick();assertEquals("필기 모드에서도 하단 메뉴는 그대로입니다",View.VISIBLE,read.getVisibility());assertEquals(View.VISIBLE,strip.getVisibility());assertEquals("필기 모드에서는 펜이 바로 켜집니다",1,(int)(Integer)field("inkMode"));
-        assertNotNull("지우개는 필기 모드 옆 하단 메뉴에 있습니다",description(bar,"지우개"));View options=root.findViewWithTag("ink_options");
+        description(bar,"필기").performClick();assertEquals("필기 모드에서도 하단 메뉴는 그대로입니다",View.VISIBLE,read.getVisibility());assertEquals(View.VISIBLE,strip.getVisibility());assertEquals("필기 모드에서는 펜이 바로 켜집니다",1,(int)(Integer)field("inkMode"));
+        assertNotNull("지우개는 떠 있는 필기 패널에 있습니다",description(root,"지우개"));View options=root.findViewWithTag("ink_options");
         layout(root,360,720);assertEquals("굵기·색은 필기 도구 줄 아래가 아니라 펜 설정 패널에 있습니다",View.GONE,options.getVisibility());
         description(root,"펜").performClick();description(root,"형광펜").performClick();assertTrue("형광펜은 필기(잉크)의 한 종류입니다",(Boolean)field("inkHl"));assertFalse("하이라이트 도구와는 별개입니다",(Boolean)field("highlightMode"));assertEquals(1,(int)(Integer)field("inkMode"));layout(root,360,720);assertEquals("형광펜에도 줄이 생기지 않습니다",View.GONE,options.getVisibility());
-        description(root,"형광펜").performClick();description(bar,"지우개").performClick();assertEquals(2,(int)(Integer)field("inkMode"));assertFalse("지우개를 고르면 형광펜이 풀립니다",(Boolean)field("inkHl"));assertEquals("지우개에는 굵기·색 줄이 없습니다",View.GONE,options.getVisibility());
-        description(bar,"필기 모드").performClick();assertEquals("한 번 더 누르면 필기 도구 줄이 숨습니다",View.GONE,strip.getVisibility());assertTrue((Boolean)field("writeMode"));
-        description(bar,"필기 모드").performClick();assertEquals(View.VISIBLE,strip.getVisibility());
-        description(bar,"읽기 모드").performClick();assertEquals(View.GONE,strip.getVisibility());assertEquals(0,(int)(Integer)field("inkMode"));
-        screenshot(root,"reading-mode.png");description(bar,"필기 모드").performClick();layout(root,360,720);screenshot(root,"writing-mode.png");
+        description(root,"형광펜").performClick();description(root,"지우개").performClick();assertEquals(2,(int)(Integer)field("inkMode"));assertFalse("지우개를 고르면 형광펜이 풀립니다",(Boolean)field("inkHl"));assertEquals("지우개에는 굵기·색 줄이 없습니다",View.GONE,options.getVisibility());
+        description(bar,"필기").performClick();assertEquals("한 번 더 누르면 필기 도구 줄이 숨습니다",View.GONE,strip.getVisibility());assertTrue((Boolean)field("writeMode"));
+        description(bar,"필기").performClick();assertEquals(View.VISIBLE,strip.getVisibility());
+        Method sw=MainActivity.class.getDeclaredMethod("setWriteMode",boolean.class);sw.setAccessible(true);sw.invoke(activity,false);
+        assertEquals(View.GONE,strip.getVisibility());assertEquals(0,(int)(Integer)field("inkMode"));
+        screenshot(root,"reading-mode.png");description(bar,"필기").performClick();layout(root,360,720);screenshot(root,"writing-mode.png");
     }
     @Test public void mainMenuIsACompactCardNotAFullSheet()throws Exception{
         View root=field("root");layout(root,360,720);View more=description(root,"도구");assertNotNull(more);more.performClick();

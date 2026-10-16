@@ -22,7 +22,14 @@ final class LibraryBackup {
     static boolean safeRel(String rel, boolean pdf) {
         if (rel == null || rel.isEmpty() || rel.length() > 400 || rel.startsWith("/") || rel.contains("\\") || rel.contains("\0")) return false;
         if (pdf && !rel.toLowerCase(Locale.ROOT).endsWith(".pdf")) return false;
-        for (String part : rel.split("/", -1)) if (part.isEmpty() || part.equals(".") || part.equals("..") || part.startsWith(".")) return false;
+        for (String part : rel.split("/", -1)) {
+            if (part.isEmpty() || part.equals(".") || part.equals("..") || part.startsWith(".")) return false;
+            String upper = part.toUpperCase(Locale.ROOT);
+            int dot = upper.indexOf('.');
+            String base = dot < 0 ? upper : upper.substring(0, dot);
+            if (base.equals("CON") || base.equals("PRN") || base.equals("AUX") || base.equals("NUL")) return false;
+            if ((base.startsWith("COM") || base.startsWith("LPT")) && base.length() == 4 && base.charAt(3) >= '1' && base.charAt(3) <= '9') return false;
+        }
         return true;
     }
 

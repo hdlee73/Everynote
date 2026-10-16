@@ -218,9 +218,8 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         ImageButton libraryButton=icon(R.drawable.ic_folder_open,"문서함",NAVY,v->showLibrary());libraryButton.setColorFilter(null);libraryButton.setImageDrawable(new FolderIconDrawable(LibraryRepository.FOLDER_COLORS[1],dp(30)));libraryButton.setBackground(round(Color.WHITE,16));libraryButton.setPadding(dp(5),dp(5),dp(5),dp(5));LinearLayout.LayoutParams libraryParams=new LinearLayout.LayoutParams(dp(42),dp(42));libraryParams.setMargins(dp(8),0,dp(2),0);header.addView(libraryButton,libraryParams);
         titleView=new TextView(this);titleView.setTextColor(NAVY);titleView.setTextSize(15);titleView.setTypeface(Typeface.DEFAULT_BOLD);titleView.setTag("document_title");titleView.setOnClickListener(v->{if(activeSession!=null)beginTitleEdit();else showLibrary();});titleView.setSingleLine();titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);titleView.setTextDirection(View.TEXT_DIRECTION_LTR);titleView.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);titleView.setPadding(dp(8),0,dp(8),0);titleView.setBackground(round(Color.WHITE,18));titleView.setMaxWidth(Math.round(getResources().getDisplayMetrics().widthPixels*.46f));titleView.setPadding(dp(14),0,dp(14),0);LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(-2,dp(36));titleParams.setMargins(dp(6),0,dp(6),0);header.addView(titleView,titleParams);header.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
         header.addOnLayoutChangeListener((v,l,t,rr,b,ol,ot,or,ob)->{int w=rr-l;if(w<=0)return;int max=Math.max(dp(60),Math.min(Math.round(w*.46f),w-dp(300)));if(titleView.getMaxWidth()!=max)titleView.setMaxWidth(max);});
-        header.addView(icon(R.drawable.ic_sidebar,"페이지 목록",0xFF007AFF,v->toggleSidebar()),new LinearLayout.LayoutParams(dp(44),dp(52)));
+        // 시안B: 상단은 문서함·제목·검색·전체화면·도구만. 페이지 목록·분할 보기는 보기 메뉴에 유지.
         header.addView(icon(R.drawable.ic_search,"문서·필기 검색",0xFF30B0C7,v->searchDocument()),new LinearLayout.LayoutParams(dp(44),dp(52)));
-        splitButton=icon(R.drawable.ic_dual,"분할 보기 · 문서 두 개를 나란히",0xFF5856D6,v->toggleSplit());header.addView(splitButton,new LinearLayout.LayoutParams(dp(44),dp(52)));
         header.addView(icon(R.drawable.ic_fullscreen,"전체 화면",0xFFAF52DE,v->toggleFullscreen()),new LinearLayout.LayoutParams(dp(44),dp(52)));
         header.addView(icon(R.drawable.ic_more_vert,"도구",NAVY,v->showMainMenu(v,false)),new LinearLayout.LayoutParams(dp(44),dp(52)));content.addView(header,new LinearLayout.LayoutParams(-1,dp(52)));
         tabStrip=new HorizontalScrollView(this);tabStrip.setHorizontalScrollBarEnabled(false);tabStrip.setBackgroundColor(0xFFF7F7F7);tabRow=new LinearLayout(this);tabRow.setGravity(Gravity.CENTER_VERTICAL);tabRow.setPadding(dp(6),dp(4),dp(6),dp(4));tabStrip.addView(tabRow,new HorizontalScrollView.LayoutParams(-2,-1));content.addView(tabStrip,new LinearLayout.LayoutParams(-1,dp(40)));
@@ -270,14 +269,12 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         readBar=new LinearLayout(this);readBar.setTag("read_bar");readBar.setGravity(Gravity.CENTER_VERTICAL);writeBar=new LinearLayout(this);writeBar.setTag("writing_toolbar");writeBar.setGravity(Gravity.CENTER_VERTICAL);writeBar.setVisibility(View.VISIBLE);writeBar.setTag("writing_toolbar");
         pageLabel=new TextView(this);pageLabel.setTag("page_indicator");pageLabel.setGravity(Gravity.CENTER);pageLabel.setIncludeFontPadding(false);pageLabel.setPadding(0,0,0,0);pageLabel.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);pageLabel.setTextColor(0xFF8E8E93);pageLabel.setTextSize(11);pageLabel.setSingleLine();pageLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);pageLabel.setBackground(round(0xFFF2F2F7,10));pageLabel.setContentDescription("페이지 번호 · 눌러 이동");pageLabel.setOnClickListener(v->{if(renderer==null)showAddDocumentMenu();else goToPage();});LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(dp(64),dp(32));pp.setMargins(0,0,dp(5),0);readBar.addView(pageLabel,pp);
         pageLabel.setOnClickListener(v->{if(renderer==null)showAddDocumentMenu();else showPageJumpMenu(v);});pageLabel.setContentDescription("페이지 이동");
-        barIcon(readBar,R.drawable.ic_eye,"보기 방법",0xFF30B0C7,v->showViewMenu(v));
-        readButton=barIcon(readBar,R.drawable.ic_book,"읽기 모드",0xFF007AFF,v->setWriteMode(false));
-        inkButton=barIcon(readBar,R.drawable.ic_ink,"필기 모드",0xFF5856D6,v->inkModeTap());
-        eraserBarButton=barIcon(readBar,R.drawable.ic_eraser,"지우개",0xFFFF6B8A,v->eraserBarTap(v));
-        textButton=barIcon(readBar,R.drawable.ic_text,"타이핑",0xFF34C759,v->toggleTyping());
-        bookmarkButton=barIcon(readBar,R.drawable.ic_star_outline,"즐겨찾기",0xFFF5A623,v->toggleBookmark());
-        lassoButton=barIcon(readBar,R.drawable.ic_lasso,"올가미 선택",0xFFAF52DE,v->toggleLasso(v));
+        // 시안A: 하단 5탭 (홈·보기·필기·삽입·도구). 지우개·타이핑·즐겨찾기·올가미는 필기 패널·삽입/보기 메뉴에 유지. 읽기 모드 복귀는 보기 메뉴의 '읽기 모드' 행.
+        barIcon(readBar,R.drawable.ic_folder_open,"홈 · 문서함",0xFF007AFF,v->showLibrary());
+        readButton=barIcon(readBar,R.drawable.ic_eye,"보기 · 이동",0xFF30B0C7,v->showViewMenu(v));
+        inkButton=barIcon(readBar,R.drawable.ic_ink,"필기",0xFF5856D6,v->inkModeTap());
         insertButton=barIcon(readBar,R.drawable.ic_insert,"삽입 · 메모 사진 스티커 도형 표",0xFFFF2D55,v->showInsertMenu(v));
+        barIcon(readBar,R.drawable.ic_more_vert,"도구 · 설정",0xFF8E8E93,v->showMainMenu(v,false));
         writeBar.setBackground(round(0xF8FFFFFF,22));writeBar.setElevation(dp(8));writeBar.setPadding(dp(4),0,dp(4),0);
         penButton=stripIcon(R.drawable.ic_ink,"펜",0xFF1C1C1E,v->penTap(v));
         hlButton=stripIcon(R.drawable.ic_highlight,"형광펜",0xFFF5C400,v->highlightTap(v));
@@ -525,6 +522,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private void showViewMenu(View anchor){
         if(renderer==null){toast("문서를 먼저 여세요");return;}
         List<AnchoredMenu.Row> rows=AnchoredMenu.rows(
+            new AnchoredMenu.Row("읽기 모드",R.drawable.ic_book,()->setWriteMode(false)).tint(0xFF007AFF),
             new AnchoredMenu.Row("페이지 미리보기",R.drawable.ic_sidebar,this::toggleSidebar).tint(0xFF007AFF).selected(sidebarVisible),
             new AnchoredMenu.Row("두 쪽 보기",R.drawable.ic_book,this::toggleTwoPage).tint(0xFF5856D6).selected(twoPage),
             new AnchoredMenu.Row("문서 분할 보기",R.drawable.ic_sidebar,this::toggleSplit).tint(0xFFFF9500).selected(splitMode),
@@ -1056,7 +1054,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private void updateInkButton(){boolean hl=inkHl&&(inkMode==1||inkMode==3),eraser=inkMode==2,pen=!hl&&(inkMode==1||inkMode==3);int penColor=inkColor|0xFF000000,hlColor=hColor()|0xFF000000;if(hlButton!=null){hlButton.setImageResource(hlTape?R.drawable.ic_tape:R.drawable.ic_highlight);hlButton.setContentDescription(hlTape?"테이프":"형광펜");}
         if(penButton!=null)baseTint.put(penButton,penColor);if(hlButton!=null)baseTint.put(hlButton,hlColor);
         paintTool(penButton,pen,soft(penColor),penColor);paintTool(hlButton,hl,soft(hlColor),hlColor);paintTool(eraserButton,eraser,0xFFFFE3E8,0xFFFF3B30);paintTool(eraserBarButton,eraser&&writeMode,0xFFFFE3E8,0xFFFF3B30);updateInkOptions();
-        if(penButton!=null)penButton.setContentDescription("펜");if(inkButton!=null){inkButton.setContentDescription("필기 모드");}}
+        if(penButton!=null)penButton.setContentDescription("펜");}
     private void toggleFingerInk(){fingerInk=!fingerInk;recentPrefs.edit().putBoolean("finger_ink",fingerInk).apply();pageView.setFingerInk(fingerInk);syncOtherTools();toast(fingerInk?"펜·지우개는 손가락으로도 사용합니다. 두 손가락으로 확대하세요":"손가락은 선택·이동, S펜은 필기에 사용합니다");}
     /** Undo / redo of any edit of the document (ink, highlights, memos, typed text, shapes, pictures, moves, deletions), not only the last pen stroke. */
     private void undoInk(){stepHistory(true);}
@@ -1078,7 +1076,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private ImageButton undoButton,redoButton;
     private void showInkHelp(){new AlertDialog.Builder(this).setTitle("필기 안내").setMessage("• S펜: 필기 또는 지우개\n• 손가락 필기 켜기: 펜·지우개 사용\n• 손가락 필기 끄기: 글자 선택·화면 이동\n• 두 손가락: 확대·이동\n• 필압: 누르는 힘에 따라 선 굵기 변화\n• S펜 측면 버튼: 누르는 동안 임시 지우개\n• 펜 뒤쪽 지우개: 지원 기기에서 자동 인식\n\n일반 정전식 펜과 손가락은 필압을 지원하지 않습니다.").setPositiveButton("확인",null).show();}
     private void toggleBookmark(){if(renderer==null)return;if(!store.bookmarks.add(currentPage))store.bookmarks.remove(currentPage);store.save();updateBookmarkButton();if(sidebarVisible&&!showAllThumbnails&&!thumbInk)rebuildThumbnails();}
-    private void updateBookmarkButton(){boolean marked=renderer!=null&&store.bookmarks.contains(currentPage);bookmarkButton.setImageResource(marked?R.drawable.ic_star:R.drawable.ic_star_outline);bookmarkButton.setColorFilter(marked?0xFFF59E0B:NAVY);bookmarkButton.setContentDescription(marked?"즐겨찾기 해제":"즐겨찾기 추가");}
+    private void updateBookmarkButton(){if(bookmarkButton==null)return;boolean marked=renderer!=null&&store.bookmarks.contains(currentPage);bookmarkButton.setImageResource(marked?R.drawable.ic_star:R.drawable.ic_star_outline);bookmarkButton.setColorFilter(marked?0xFFF59E0B:NAVY);bookmarkButton.setContentDescription(marked?"즐겨찾기 해제":"즐겨찾기 추가");}
     /** In full screen the system navigation/status bars must stay hidden, also after a swipe from the screen edge briefly reveals them. */
     private final Runnable barHider=()->{if(!fullscreen)return;if(Build.VERSION.SDK_INT>=30){WindowInsetsController c=getWindow().getInsetsController();if(c!=null)c.hide(WindowInsets.Type.systemBars());}else getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);};
     /** The bottom menu and the full-screen floating dock never show together: the dock exists only in full screen, the bar only outside it. */
@@ -2009,6 +2007,8 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         List<AnchoredMenu.Row> rows=new ArrayList<>(insertRowsWithPaste());
         rows.add(0,new AnchoredMenu.Row("메모",R.drawable.ic_note_add,this::toggleMemoMode).tint(0xFFFF9500).selected(memoMode));
         rows.add(1,new AnchoredMenu.Row("하이라이트",R.drawable.ic_highlight,()->{toggleHighlight();if(highlightMode)showMarkHighlightMenu(anchor);}).tint(0xFFF5C400).selected(highlightMode));
+        rows.add(2,new AnchoredMenu.Row("올가미 · 영역 캡처",R.drawable.ic_lasso,()->toggleLasso(anchor)).tint(0xFFAF52DE));
+        rows.add(3,new AnchoredMenu.Row("타이핑",R.drawable.ic_text,this::toggleTyping).tint(0xFF34C759));
         AnchoredMenu.show(this,anchor,true,rows,null);
     }
     private View tapAnchor;
@@ -3287,8 +3287,8 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
          "문서함|상단 왼쪽 폴더 버튼에서 PDF·노트·Office 문서를 폴더별로 관리합니다. 새 문서는 폴더 버튼 또는 탭 줄의 + 버튼으로 추가합니다. 문서를 길게 누르면 선택 모드가 되어 위쪽 줄에서 이동·공유·삭제·전체 선택을 하고 ⋮에서 이름 변경·복사본 만들기·즐겨찾기를 합니다. 설정은 문서함의 설정 항목(더보기 메뉴 포함)에서 엽니다.",
          "여러 문서|상단 탭으로 문서를 전환하고 × 로 닫습니다. 기록은 문서마다 따로 저장됩니다."},
         {"2. 화면 구성",
-         "상단 줄|문서함, 문서 이름, 페이지 미리보기, 검색, 전체 화면, 더보기(⋮) 메뉴가 있습니다.",
-         "하단 도구 줄|읽기 · 펜 · 형광펜 · 지우개 · 올가미 · 텍스트 · 메모 · 삽입 · 실행 취소 · 다시 실행 순서입니다. 선택한 도구는 배경이 진하게 표시되고, 선택된 도구를 한 번 더 누르면 굵기·색 같은 세부 설정이 열립니다.",
+         "상단 줄|문서함, 문서 이름, 검색, 전체 화면, 더보기(⋮) 메뉴가 있습니다. 페이지 미리보기·화면 나누기는 보기 메뉴에서 엽니다.",
+         "하단 도구 줄|홈 · 보기 · 필기 · 삽입 · 도구 5개입니다. 지우개·타이핑·올가미는 필기 패널과 삽입 메뉴에, 즐겨찾기·실행 취소·다시 실행은 도구 메뉴에 있습니다. 선택한 도구는 배경이 진하게 표시되고, 필기 도구를 한 번 더 누르면 굵기·색 같은 세부 설정이 열립니다.",
          "왼쪽 패널|검색 · 페이지 미리보기 · 개요 · 음성 녹음 탭이 있습니다. 패널과 문서 사이의 회색 막대를 좌우로 끌면 폭을 조절하고, 조절한 폭은 기억됩니다.",
          "반투명 화살표|본문 양옆의 화살표를 누르면 이전·다음 페이지로 이동합니다."},
         {"3. 읽기와 이동",
@@ -3311,7 +3311,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
          "테이프|형광펜 단추를 한 번 더 눌러 ‘종류’에서 테이프를 고르면 넓고 반투명한 마스킹 테이프를 칠할 수 있습니다. 굵기·투명도·색은 형광펜과 따로 기억하며, 지우개로 지울 수 있습니다.",
          "백업·동기화|문서함 오른쪽 위 ⋮의 ‘이 폴더 백업’은 그 폴더(하위 폴더 포함)의 문서·필기·첨부를 ZIP 하나로 저장하고, ‘백업 복원’으로 다른 기기에서 원래 폴더 위치에 불러옵니다. ‘내보내기·백업 › 다른 기기와 동기화’는 같은 네트워크(Wi-Fi·핫스팟·USB 테더링)의 PC 앱과 문서를 통째로 주고받습니다.",
          "지우개|지우개 아이콘으로 필기와 하이라이트를 지웁니다. 지울 부분을 문지르거나 눌러서 한 획(하이라이트는 한 덩어리)씩 지워집니다. 실행 취소·다시 실행도 사용할 수 있습니다.",
-         "올가미|영역을 그려 캡처하거나 글자를 복사합니다. 올가미 단추를 한 번 더 누르면 모양(자유·네모·원) 메뉴가 떠서 고를 수 있고, 영역을 그리면 복사·저장·공유 메뉴가 열립니다."},
+         "올가미|삽입 메뉴에서 영역을 그려 캡처하거나 글자를 복사합니다. 올가미 행을 한 번 더 누르면 모양(자유·네모·원) 메뉴가 떠서 고를 수 있고, 영역을 그리면 복사·저장·공유 메뉴가 열립니다."},
         {"6. 형광펜과 하이라이트",
          "형광펜|필기 도구 줄의 형광펜은 펜처럼 쓰는 필기의 한 종류입니다. 쓰듯이 자유롭게 칠할 수 있고, 한 번 더 누르면 색·투명도·굵기와 모양(직선 / 자유형)을 고릅니다. 지우개로 지우고 실행 취소도 됩니다.",
          "하이라이트|글자를 따라 반듯하게 칠하는 도구입니다. 삽입 메뉴의 ‘하이라이트’를 켜고 글자를 좌우로 끌거나, 글자를 선택한 뒤 팝업의 ‘하이라이트’를 누릅니다. 굵기만 조절할 수 있고, 하이라이트를 누르면 메모를 달 수 있습니다.",
