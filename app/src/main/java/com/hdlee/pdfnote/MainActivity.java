@@ -2007,7 +2007,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         List<AnchoredMenu.Row> rows=new ArrayList<>(insertRowsWithPaste());
         rows.add(0,new AnchoredMenu.Row("메모",R.drawable.ic_note_add,this::toggleMemoMode).tint(0xFFFF9500).selected(memoMode));
         rows.add(1,new AnchoredMenu.Row("하이라이트",R.drawable.ic_highlight,()->{toggleHighlight();if(highlightMode)showMarkHighlightMenu(anchor);}).tint(0xFFF5C400).selected(highlightMode));
-        rows.add(2,new AnchoredMenu.Row("올가미 · 영역 캡처",R.drawable.ic_lasso,v->toggleLasso(v)).tint(0xFFAF52DE));
+        rows.add(2,new AnchoredMenu.Row("올가미 · 영역 캡처",R.drawable.ic_lasso,()->toggleLasso(anchor)).tint(0xFFAF52DE));
         rows.add(3,new AnchoredMenu.Row("타이핑",R.drawable.ic_text,this::toggleTyping).tint(0xFF34C759));
         AnchoredMenu.show(this,anchor,true,rows,null);
     }
