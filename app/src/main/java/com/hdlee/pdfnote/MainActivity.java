@@ -1054,7 +1054,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private void updateInkButton(){boolean hl=inkHl&&(inkMode==1||inkMode==3),eraser=inkMode==2,pen=!hl&&(inkMode==1||inkMode==3);int penColor=inkColor|0xFF000000,hlColor=hColor()|0xFF000000;if(hlButton!=null){hlButton.setImageResource(hlTape?R.drawable.ic_tape:R.drawable.ic_highlight);hlButton.setContentDescription(hlTape?"테이프":"형광펜");}
         if(penButton!=null)baseTint.put(penButton,penColor);if(hlButton!=null)baseTint.put(hlButton,hlColor);
         paintTool(penButton,pen,soft(penColor),penColor);paintTool(hlButton,hl,soft(hlColor),hlColor);paintTool(eraserButton,eraser,0xFFFFE3E8,0xFFFF3B30);paintTool(eraserBarButton,eraser&&writeMode,0xFFFFE3E8,0xFFFF3B30);updateInkOptions();
-        if(penButton!=null)penButton.setContentDescription("펜");if(inkButton!=null){inkButton.setContentDescription("필기 모드");}}
+        if(penButton!=null)penButton.setContentDescription("펜");}
     private void toggleFingerInk(){fingerInk=!fingerInk;recentPrefs.edit().putBoolean("finger_ink",fingerInk).apply();pageView.setFingerInk(fingerInk);syncOtherTools();toast(fingerInk?"펜·지우개는 손가락으로도 사용합니다. 두 손가락으로 확대하세요":"손가락은 선택·이동, S펜은 필기에 사용합니다");}
     /** Undo / redo of any edit of the document (ink, highlights, memos, typed text, shapes, pictures, moves, deletions), not only the last pen stroke. */
     private void undoInk(){stepHistory(true);}

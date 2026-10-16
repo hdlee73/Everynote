@@ -37,7 +37,7 @@ public class ReadingToolbarTest {
         View root=field("root");layout(root,360,720);View bar=root.findViewWithTag("reading_toolbar");TextView page=root.findViewWithTag("page_indicator");
         assertEquals(54,bar.getLayoutParams().height-bar.getPaddingBottom());assertEquals(64,page.getLayoutParams().width);assertTrue(page.getLayoutParams().width<bar.getWidth()/3);
         assertNull("문서 개요는 페이지 이동 메뉴로 옮겼습니다",description(bar,"문서 개요"));
-        for(String name:new String[]{"홈 · 문서함","보기 · 이동","필기","삽입","도구 · 설정","하단 메뉴 위치·방향"})assertNotNull(name,description(bar,name));
+        for(String name:new String[]{"홈 · 문서함","보기 · 이동","필기","삽입 · 메모 사진 스티커 도형 표","도구 · 설정","하단 메뉴 위치·방향"})assertNotNull(name,description(bar,name));
         assertNull("즐겨찾기는 도구 메뉴에 있습니다",description(bar,"즐겨찾기"));assertNull("타이핑은 삽입 메뉴에 있습니다",description(bar,"타이핑"));assertNull("올가미는 삽입 메뉴에 있습니다",description(bar,"올가미 선택"));
         assertNull("메모는 삽입 메뉴 안에 있습니다",description(bar,"메모"));
         invoke("showOutlineList");View side=root.findViewWithTag("side_panel");assertEquals("개요는 미리보기 패널의 탭으로 열립니다",View.VISIBLE,side.getVisibility());assertNotNull(root.findViewWithTag("outline_add"));invoke("showOutlineList");assertEquals(View.GONE,side.getVisibility());
