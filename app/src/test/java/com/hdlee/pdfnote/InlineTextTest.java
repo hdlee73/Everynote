@@ -86,7 +86,7 @@ public class InlineTextTest {
     }
     @Test public void sidePanelHostsSearchPagesOutlineAndRecordings()throws Exception{
         View side=byTag("side_panel");assertEquals(View.GONE,side.getVisibility());
-        byDescription(root,"페이지 목록").performClick();assertEquals(View.VISIBLE,side.getVisibility());assertTrue(((TextView)byTag("side_title")).getText().toString().endsWith("미리보기"));assertEquals(View.VISIBLE,byTag("side_more").getVisibility());
+        invoke("toggleSidebar");assertEquals(View.VISIBLE,side.getVisibility());assertTrue(((TextView)byTag("side_title")).getText().toString().endsWith("미리보기"));assertEquals(View.VISIBLE,byTag("side_more").getVisibility());
         byTag("side_tab:2").performClick();assertNotNull(byTag("outline_add"));assertEquals(View.GONE,byTag("side_more").getVisibility());assertTrue(((TextView)byTag("side_title")).getText().toString().endsWith("개요"));
         byTag("side_tab:3").performClick();assertNotNull(byTag("record_button"));assertTrue(((TextView)byTag("side_title")).getText().toString().endsWith("음성 녹음"));
         byTag("side_tab:0").performClick();assertEquals(View.VISIBLE,byTag("search_panel").getVisibility());assertNotNull(byTag("search_input"));
@@ -96,15 +96,18 @@ public class InlineTextTest {
     @Test public void audioNoteTapsOpenAPlayerAndListedRecordingsCanBeDeleted()throws Exception{
         AnnotationStore.PageElement clip=new AnnotationStore.PageElement();clip.page=0;clip.kind="audio";clip.asset=UUID.randomUUID()+".m4a";clip.text="0:12";clip.left=.04f;clip.top=.03f;clip.right=.42f;clip.bottom=.075f;store.elements.add(clip);
         activity.onElementTapped(clip);AlertDialog player=(AlertDialog)org.robolectric.shadows.ShadowDialog.getLatestDialog();assertNotNull(player);assertEquals("녹음 파일이 없으면 안내 대화상자가 열립니다","녹음",player.getTitleText().toString());player.dismiss();
-        byDescription(root,"페이지 목록").performClick();byTag("side_tab:3").performClick();assertNotNull("첨부한 녹음이 목록에 보입니다",byTag("recording_item"));
+        invoke("toggleSidebar");byTag("side_tab:3").performClick();assertNotNull("첨부한 녹음이 목록에 보입니다",byTag("recording_item"));
         byDescription(root,"녹음 관리").performClick();java.lang.reflect.Method del=activity.getClass().getDeclaredMethod("deleteRecording",AnnotationStore.PageElement.class);del.setAccessible(true);del.invoke(activity,clip);assertTrue(store.elements.isEmpty());assertNull(byTag("recording_item"));
     }
-    @Test public void headerTitleRenamesAndLassoIsOnTheMainToolbar()throws Exception{
+    @Test public void headerTitleRenamesAndLassoIsInTheInsertMenu()throws Exception{
         View title=byTag("document_title");assertNotNull(title);assertTrue(title.hasOnClickListeners());
-        View bar=byTag("reading_toolbar");View lasso=byDescription(bar,"올가미 선택");assertNotNull("올가미는 메인 하단 도구막대에 있습니다",lasso);
-        lasso.performClick();PdfPageView page=field("pageView");assertTrue(page.isLassoMode());assertNull("올가미 모양은 막대가 아니라 떠 있는 메뉴에서 고릅니다",byTag("lasso_bar"));
-        lasso.performClick();assertTrue("한 번 더 누르면 모양 메뉴가 열리고 올가미는 유지됩니다",page.isLassoMode());
+        View bar=byTag("reading_toolbar");assertNull("올가미는 하단 막대에 직접 있지 않습니다",byDescription(bar,"올가미 선택"));
+        View insert=byDescription(bar,"삽입 · 메모 사진 스티커 도형 표");assertNotNull("삽입은 하단 5탭에 있습니다",insert);
+        insert.performClick();invokeView("toggleLasso",insert);
+        PdfPageView page=field("pageView");assertTrue(page.isLassoMode());assertNull("올가미 모양은 막대가 아니라 떠 있는 메뉴에서 고릅니다",byTag("lasso_bar"));
+        invokeView("toggleLasso",insert);assertTrue("한 번 더 누르면 모양 메뉴가 열리고 올가미는 유지됩니다",page.isLassoMode());
         invokeInt("chooseLassoShape",PdfPageView.LASSO_RECT);assertEquals(PdfPageView.LASSO_RECT,page.getLassoShape());invokeInt("chooseLassoShape",PdfPageView.LASSO_CIRCLE);assertEquals(PdfPageView.LASSO_CIRCLE,page.getLassoShape());
         invokeInt("setInkMode",0);assertFalse(page.isLassoMode());
     }
+    private void invokeView(String name,View arg)throws Exception{Method m=MainActivity.class.getDeclaredMethod(name,View.class);m.setAccessible(true);m.invoke(activity,arg);}
 }

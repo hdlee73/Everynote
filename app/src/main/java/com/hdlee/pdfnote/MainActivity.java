@@ -2007,6 +2007,8 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         List<AnchoredMenu.Row> rows=new ArrayList<>(insertRowsWithPaste());
         rows.add(0,new AnchoredMenu.Row("메모",R.drawable.ic_note_add,this::toggleMemoMode).tint(0xFFFF9500).selected(memoMode));
         rows.add(1,new AnchoredMenu.Row("하이라이트",R.drawable.ic_highlight,()->{toggleHighlight();if(highlightMode)showMarkHighlightMenu(anchor);}).tint(0xFFF5C400).selected(highlightMode));
+        rows.add(2,new AnchoredMenu.Row("올가미 · 영역 캡처",R.drawable.ic_lasso,v->toggleLasso(v)).tint(0xFFAF52DE));
+        rows.add(3,new AnchoredMenu.Row("타이핑",R.drawable.ic_text,this::toggleTyping).tint(0xFF34C759));
         AnchoredMenu.show(this,anchor,true,rows,null);
     }
     private View tapAnchor;
@@ -3285,8 +3287,8 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
          "문서함|상단 왼쪽 폴더 버튼에서 PDF·노트·Office 문서를 폴더별로 관리합니다. 새 문서는 폴더 버튼 또는 탭 줄의 + 버튼으로 추가합니다. 문서를 길게 누르면 선택 모드가 되어 위쪽 줄에서 이동·공유·삭제·전체 선택을 하고 ⋮에서 이름 변경·복사본 만들기·즐겨찾기를 합니다. 설정은 문서함의 설정 항목(더보기 메뉴 포함)에서 엽니다.",
          "여러 문서|상단 탭으로 문서를 전환하고 × 로 닫습니다. 기록은 문서마다 따로 저장됩니다."},
         {"2. 화면 구성",
-         "상단 줄|문서함, 문서 이름, 페이지 미리보기, 검색, 전체 화면, 더보기(⋮) 메뉴가 있습니다.",
-         "하단 도구 줄|읽기 · 펜 · 형광펜 · 지우개 · 올가미 · 텍스트 · 메모 · 삽입 · 실행 취소 · 다시 실행 순서입니다. 선택한 도구는 배경이 진하게 표시되고, 선택된 도구를 한 번 더 누르면 굵기·색 같은 세부 설정이 열립니다.",
+         "상단 줄|문서함, 문서 이름, 검색, 전체 화면, 더보기(⋮) 메뉴가 있습니다. 페이지 미리보기·화면 나누기는 보기 메뉴에서 엽니다.",
+         "하단 도구 줄|홈 · 보기 · 필기 · 삽입 · 도구 5개입니다. 지우개·타이핑·올가미는 필기 패널과 삽입 메뉴에, 즐겨찾기·실행 취소·다시 실행은 도구 메뉴에 있습니다. 선택한 도구는 배경이 진하게 표시되고, 필기 도구를 한 번 더 누르면 굵기·색 같은 세부 설정이 열립니다.",
          "왼쪽 패널|검색 · 페이지 미리보기 · 개요 · 음성 녹음 탭이 있습니다. 패널과 문서 사이의 회색 막대를 좌우로 끌면 폭을 조절하고, 조절한 폭은 기억됩니다.",
          "반투명 화살표|본문 양옆의 화살표를 누르면 이전·다음 페이지로 이동합니다."},
         {"3. 읽기와 이동",
@@ -3309,7 +3311,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
          "테이프|형광펜 단추를 한 번 더 눌러 ‘종류’에서 테이프를 고르면 넓고 반투명한 마스킹 테이프를 칠할 수 있습니다. 굵기·투명도·색은 형광펜과 따로 기억하며, 지우개로 지울 수 있습니다.",
          "백업·동기화|문서함 오른쪽 위 ⋮의 ‘이 폴더 백업’은 그 폴더(하위 폴더 포함)의 문서·필기·첨부를 ZIP 하나로 저장하고, ‘백업 복원’으로 다른 기기에서 원래 폴더 위치에 불러옵니다. ‘내보내기·백업 › 다른 기기와 동기화’는 같은 네트워크(Wi-Fi·핫스팟·USB 테더링)의 PC 앱과 문서를 통째로 주고받습니다.",
          "지우개|지우개 아이콘으로 필기와 하이라이트를 지웁니다. 지울 부분을 문지르거나 눌러서 한 획(하이라이트는 한 덩어리)씩 지워집니다. 실행 취소·다시 실행도 사용할 수 있습니다.",
-         "올가미|영역을 그려 캡처하거나 글자를 복사합니다. 올가미 단추를 한 번 더 누르면 모양(자유·네모·원) 메뉴가 떠서 고를 수 있고, 영역을 그리면 복사·저장·공유 메뉴가 열립니다."},
+         "올가미|삽입 메뉴에서 영역을 그려 캡처하거나 글자를 복사합니다. 올가미 행을 한 번 더 누르면 모양(자유·네모·원) 메뉴가 떠서 고를 수 있고, 영역을 그리면 복사·저장·공유 메뉴가 열립니다."},
         {"6. 형광펜과 하이라이트",
          "형광펜|필기 도구 줄의 형광펜은 펜처럼 쓰는 필기의 한 종류입니다. 쓰듯이 자유롭게 칠할 수 있고, 한 번 더 누르면 색·투명도·굵기와 모양(직선 / 자유형)을 고릅니다. 지우개로 지우고 실행 취소도 됩니다.",
          "하이라이트|글자를 따라 반듯하게 칠하는 도구입니다. 삽입 메뉴의 ‘하이라이트’를 켜고 글자를 좌우로 끌거나, 글자를 선택한 뒤 팝업의 ‘하이라이트’를 누릅니다. 굵기만 조절할 수 있고, 하이라이트를 누르면 메모를 달 수 있습니다.",
