@@ -22,6 +22,8 @@ final class LibraryDialog extends Dialog {
     interface Actions {
         void open(File file);
         void importFiles(File folder);
+        /** Pick a folder on the device and copy the PDFs in it (with its sub-folders) into [folder]. */
+        default void importFolder(File folder){}
         void newNote(File folder,Runnable refresh);
         void changed(File source,File target,boolean moved);
         void selectedFolder(File folder);
@@ -180,9 +182,13 @@ final class LibraryDialog extends Dialog {
         List<AnchoredMenu.Row> rows=new ArrayList<>();
         if(files.size()==1)rows.add(new AnchoredMenu.Row("이름 변경",R.drawable.ic_rename,()->runSelectionCommand("이름 변경")).tint(0xFF848487));
         rows.add(new AnchoredMenu.Row("복사본 만들기",R.drawable.ic_copy,()->runSelectionCommand("복사")).tint(0xFF848487));
+        if(files.size()>=2)rows.add(new AnchoredMenu.Row("문서 합치기",R.drawable.ic_page_add,()->{File here=mode==FOLDER?folder:repository.root;PageTools.merge(activity,repository,orderedSelection(files),here,()->{selectionMode=false;selected.clear();reload();});}).tint(0xFF848487));
+        if(files.size()==1)rows.add(new AnchoredMenu.Row("페이지 뽑아 새 파일 만들기",R.drawable.ic_page_add,()->{File here=mode==FOLDER?folder:repository.root;PageTools.extract(activity,repository,files.get(0),here,"",()->{selectionMode=false;selected.clear();reload();},null);}).tint(0xFF848487));
         rows.add(new AnchoredMenu.Row(allFavorite?"즐겨찾기 해제":"즐겨찾기에 추가",allFavorite?R.drawable.ic_star:R.drawable.ic_star_outline,()->runSelectionCommand("즐겨찾기")).tint(0xFFF5A623));
         AnchoredMenu.show(activity,anchor,false,rows,null);
     }
+    /** The selected documents in the order they are shown. */
+    private List<File> orderedSelection(List<File> files){List<File> ordered=new ArrayList<>();for(File f:items())if(files.contains(f))ordered.add(f);for(File f:files)if(!ordered.contains(f))ordered.add(f);return ordered;}
     private void runSelectionCommand(String action){
         List<File> files=new ArrayList<>(selected);
         if(action.equals("전체")){if(allSelected())selected.clear();else for(File item:items())if(item.isFile())selected.add(item);refreshGrid();return;}
@@ -324,13 +330,14 @@ final class LibraryDialog extends Dialog {
         AnchoredMenu.showCentered(activity,anchor,"문서 추가",AnchoredMenu.rows(
             new AnchoredMenu.Row("새 노트 만들기",R.drawable.ic_compose,()->actions.newNote(target,this::refresh)).tint(0xFF34C759),
             new AnchoredMenu.Row("파일 가져오기",R.drawable.ic_import,()->{dismiss();actions.importFiles(target);}).tint(0xFF387AFF),
+            new AnchoredMenu.Row("폴더째 가져오기",R.drawable.ic_import,()->{dismiss();actions.importFolder(target);}).tint(0xFF387AFF),
             new AnchoredMenu.Row("폴더 만들기",R.drawable.ic_folder_open,()->createFolder(target,()->{tree.reload();refresh();})).tint(0xFFF5A623)));
     }
     private void libraryMenu(View anchor){
         PopupMenu menu=new PopupMenu(activity,anchor);int order=0;
         if(mode==TRASH){menu.getMenu().add(0,10,order++,"비우기");menu.getMenu().add(0,11,order++,"모두 복원");}
         else{
-            if(!wide){menu.getMenu().add(0,12,order++,"PDF 가져오기");menu.getMenu().add(0,1,order++,"편집");menu.getMenu().add(0,2,order++,"보기 방식");}
+            if(!wide){menu.getMenu().add(0,12,order++,"PDF 가져오기");menu.getMenu().add(0,14,order++,"폴더째 가져오기");menu.getMenu().add(0,1,order++,"편집");menu.getMenu().add(0,2,order++,"보기 방식");}
             menu.getMenu().add(0,3,order++,"정렬 방식");menu.getMenu().add(0,4,order++,(repository.pinFavorites()?"✓  ":"")+"즐겨찾기 맨 위 고정");
             menu.getMenu().add(0,13,order++,"폴더 만들기");if(mode==FOLDER)menu.getMenu().add(0,5,order++,"폴더 색상");
             menu.getMenu().add(0,8,order++,mode==FOLDER&&!folder.equals(repository.root)?"이 폴더 백업":"모든 문서 백업");menu.getMenu().add(0,9,order++,"백업 복원");
@@ -348,6 +355,7 @@ final class LibraryDialog extends Dialog {
             case 10:confirmEmptyTrash();break;
             case 11:restoreAll();break;
             case 12:dismiss();actions.importFiles(mode==FOLDER?folder:repository.root);break;
+            case 14:dismiss();actions.importFolder(mode==FOLDER?folder:repository.root);break;
             case 13:createFolder(mode==FOLDER?folder:repository.root,()->{tree.reload();refresh();});break;
         }return true;});menu.show();
     }

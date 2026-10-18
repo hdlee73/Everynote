@@ -449,6 +449,36 @@ final class AnnotationStore {
         outlines.clear();outlines.addAll(temporary.outlines);strokes.clear();strokes.addAll(temporary.strokes);
         translations.clear();translations.addAll(temporary.translations);studyEntries.clear();studyEntries.addAll(temporary.studyEntries);elements.clear();elements.addAll(temporary.elements);save();
     }
+    /** Annotation JSON of a document made of the listed pages of several sources: [exported] are their exportJson strings, [pages] the 0-based source pages taken (the new page numbers follow the order of the lists). */
+    static String compose(java.util.List<String> exported, java.util.List<int[]> pages) throws JSONException {
+        String[] keys = {"marks", "bookmarks", "outlines", "strokes", "translations", "studyEntries", "elements"};
+        JSONObject out = new JSONObject().put("format", "PDF Note annotations v2").put("document", "").put("uri", "");
+        for (String key : keys) out.put(key, new JSONArray());
+        int base = 0;
+        for (int s = 0; s < exported.size(); s++) {
+            JSONObject source = new JSONObject(exported.get(s));
+            java.util.Map<Integer, java.util.List<Integer>> targets = new java.util.HashMap<>();
+            for (int i = 0; i < pages.get(s).length; i++) {
+                java.util.List<Integer> list = targets.get(pages.get(s)[i]);
+                if (list == null) { list = new ArrayList<>(); targets.put(pages.get(s)[i], list); }
+                list.add(base + i);
+            }
+            for (String key : keys) {
+                JSONArray in = source.optJSONArray(key);
+                if (in == null) continue;
+                JSONArray to = out.getJSONArray(key);
+                for (int i = 0; i < in.length(); i++) {
+                    boolean plain = key.equals("bookmarks");
+                    int page = plain ? in.getInt(i) : in.getJSONObject(i).optInt("page", -1);
+                    java.util.List<Integer> list = targets.get(page);
+                    if (list == null) continue;
+                    for (int target : list) to.put(plain ? (Object) target : new JSONObject(in.getJSONObject(i).toString()).put("page", target));
+                }
+            }
+            base += pages.get(s).length;
+        }
+        return out.toString();
+    }
     private AnnotationStore() { prefs=null;sidecarDirectory=null; }
 
     private static String sha256(String input) {

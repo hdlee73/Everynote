@@ -72,7 +72,7 @@ final class PdfPageView extends View {
     private boolean lassoMode, lassoDrawing, suppressSelection;
     private final List<PointF> lassoPoints=new ArrayList<>();
     static final int LASSO_FREE=0,LASSO_RECT=1,LASSO_CIRCLE=2;
-    private int lassoShape=LASSO_FREE;
+    private int lassoShape=LASSO_FREE;private boolean lassoPartial=true;
     private PointF lassoAnchor;
     private int searchPage=-1;
     private List<RectF> searchBoxes=new ArrayList<>();
@@ -371,7 +371,7 @@ final class PdfPageView extends View {
     }
 
     void setDirectTextSelection(boolean enabled){directTextSelection=enabled;clearTextSelectionOverlay();}
-    void copyToolsFrom(PdfPageView other){darkPage=other.darkPage;applyBackground();directTextSelection=other.directTextSelection;highlightMode=other.highlightMode;memoMode=other.memoMode;outlineMode=other.outlineMode;highlightColor=other.highlightColor;highlightFree=other.highlightFree;highlightThick=other.highlightThick;inkMode=other.inkMode;eraserPartial=other.eraserPartial;inkColor=other.inkColor;inkWidth=other.inkWidth;eraserRadius=other.eraserRadius;inkPen=other.inkPen;fingerInk=other.fingerInk;pageSwipeEnabled=other.pageSwipeEnabled;verticalPageSwipe=other.verticalPageSwipe;lassoShape=other.lassoShape;if(lassoMode!=other.lassoMode){lassoMode=other.lassoMode;clearLassoSelection();}invalidate();}
+    void copyToolsFrom(PdfPageView other){darkPage=other.darkPage;applyBackground();directTextSelection=other.directTextSelection;lassoPartial=other.lassoPartial;highlightMode=other.highlightMode;memoMode=other.memoMode;outlineMode=other.outlineMode;highlightColor=other.highlightColor;highlightFree=other.highlightFree;highlightThick=other.highlightThick;inkMode=other.inkMode;eraserPartial=other.eraserPartial;inkColor=other.inkColor;inkWidth=other.inkWidth;eraserRadius=other.eraserRadius;inkPen=other.inkPen;fingerInk=other.fingerInk;pageSwipeEnabled=other.pageSwipeEnabled;verticalPageSwipe=other.verticalPageSwipe;lassoShape=other.lassoShape;if(lassoMode!=other.lassoMode){lassoMode=other.lassoMode;clearLassoSelection();}invalidate();}
     void setAnnotationStore(AnnotationStore store){annotationStore=store;invalidate();}
     void setFingerInk(boolean enabled){fingerInk=enabled;}
     void setPageSwipeEnabled(boolean enabled){pageSwipeEnabled=enabled;}
@@ -589,6 +589,8 @@ final class PdfPageView extends View {
     boolean isLassoMode(){return lassoMode;}
     int getLassoShape(){return lassoShape;}
     /** Switches between freehand, rectangle and circle selection; any selection in progress is discarded. */
+    /** 부분 선택된 개체 포함: words only partly inside the lasso are selected too. */
+    void setLassoPartial(boolean on){lassoPartial=on;}
     void setLassoShape(int shape){lassoShape=Math.max(LASSO_FREE,Math.min(LASSO_CIRCLE,shape));clearLassoSelection();}
     private PointF normalizedPoint(float x,float y,RectF dest){return new PointF(Math.max(0,Math.min(1,(x-dest.left)/dest.width())),Math.max(0,Math.min(1,(y-dest.top)/dest.height())));}
     /** Rebuilds the rectangle / ellipse polygon spanned by the touch-down point and the current finger position. */
@@ -665,7 +667,10 @@ final class PdfPageView extends View {
     String lassoText(){
         if(lassoPoints.size()<3)return "";android.graphics.Region region=new android.graphics.Region();region.setPath(lassoPath(new RectF(0,0,10000,10000)),new android.graphics.Region(0,0,10000,10000));
         StringBuilder text=new StringBuilder();RectF previousLine=null;
-        for(TextRegion word:textRegions)if(region.contains((int)(word.wordBounds.centerX()*10000),(int)(word.wordBounds.centerY()*10000))){if(text.length()>0)text.append(previousLine!=null&&!previousLine.equals(word.lineBounds)?'\n':' ');text.append(word.word);previousLine=word.lineBounds;}
+        for(TextRegion word:textRegions){boolean hit=region.contains((int)(word.wordBounds.centerX()*10000),(int)(word.wordBounds.centerY()*10000));
+            if(!hit&&lassoPartial){RectF b=word.wordBounds;hit=region.contains((int)(b.left*10000),(int)(b.top*10000))||region.contains((int)(b.right*10000),(int)(b.top*10000))||region.contains((int)(b.left*10000),(int)(b.bottom*10000))||region.contains((int)(b.right*10000),(int)(b.bottom*10000));
+                for(int i=0;!hit&&i<lassoPoints.size();i++){PointF q=lassoPoints.get(i);hit=q.x>=b.left&&q.x<=b.right&&q.y>=b.top&&q.y<=b.bottom;}}
+            if(hit){if(text.length()>0)text.append(previousLine!=null&&!previousLine.equals(word.lineBounds)?'\n':' ');text.append(word.word);previousLine=word.lineBounds;}}
         return text.toString();
     }
 
@@ -680,7 +685,7 @@ final class PdfPageView extends View {
         canvas.save();if(rot!=0)canvas.rotate(rot,box.centerX(),box.centerY());try{drawStickyBody(canvas,box,anchorX,anchorY,text,accent,paper,fontSp,density);}finally{canvas.restore();}return box;
     }
     private void drawStickyBody(Canvas canvas,RectF box,float anchorX,float anchorY,String text,int accent,int paper,int fontSp,float density){
-        paint.setColor(paper);canvas.drawRoundRect(box,10*density,10*density,paint);paint.setColor(accent);canvas.drawCircle(anchorX,anchorY,6*density,paint);
+        paint.setColor(paper);canvas.drawRoundRect(box,3*density,3*density,paint);paint.setColor(accent);canvas.drawCircle(anchorX,anchorY,6*density,paint);
         canvas.save();canvas.clipRect(box);try{drawStickyText(canvas,box,text,fontSp,density);}finally{canvas.restore();}
     }
     private void drawStickyText(Canvas canvas,RectF box,String text,int fontSp,float density){
@@ -754,7 +759,7 @@ final class PdfPageView extends View {
         }
         return true;
     }
-    private void drawMemo(Canvas canvas,RectF dest,AnnotationStore.Mark m){memoHitBoxes.put(m,drawSticky(canvas,dest,m.right,m.top,m.note,m.minimized,0xFFFFB300,m.paper,m.fontSp,m.boxSize,m.boxW,m.boxH,m.rot));}
+    private void drawMemo(Canvas canvas,RectF dest,AnnotationStore.Mark m){memoHitBoxes.put(m,drawSticky(canvas,dest,m.right,m.top,m.note,m.minimized,0xFFEBA597,m.paper,m.fontSp,m.boxSize,m.boxW,m.boxH,m.rot));}
     private void drawTranslation(Canvas canvas,RectF dest,AnnotationStore.TranslationNote n){noteHitBoxes.put(n,drawSticky(canvas,dest,n.right,n.top,n.translated,n.minimized,0xFF7C3AED,0xFFFFF3A6,13,1,n.boxW,n.boxH,n.rot));}
 
     private float strokeWidth(float base,float pressure,RectF dest){float p=Math.max(0.12f,Math.min(1f,pressure));return Math.max(1.5f,base*dest.width()*(0.45f+p*1.15f));}
