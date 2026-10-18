@@ -15,6 +15,8 @@ import java.util.regex.Pattern;
  * Tiny LAN server for device-to-device sync (no cloud, no automatic sync): while the "다른 기기와 동기화" card is open, the Windows app
  * on the same network (Wi-Fi, hotspot or USB tethering) can list the document library, download / upload whole documents (PDF + notes JSON) and the referenced images /
  * recordings. Documents are identified by their library-relative path. Every request needs the 6-digit code shown on the card.
+ * The PC finds the phone by itself: it broadcasts {@link #PROBE} to UDP port {@link #DISCOVERY_PORT} (and to each link's gateway, which is the
+ * phone on USB tethering / hotspot) and this server answers with its name and TCP port. The answer never carries the code.
  */
 final class DeviceSync {
     interface Host {
@@ -31,7 +33,15 @@ final class DeviceSync {
         /** The file of an image / recording / video asset (may not exist yet), or null for an invalid name. */
         File assetFile(String name);
         void onActivity(String message);
+        /** Shown to the PC: phone model (e.g. "SM-S918N"). */
+        default String deviceName() { return "Android"; }
+        /** Stable random id of this install, so the PC can remember what was synced with this phone. */
+        default String deviceId() { return ""; }
+        default String appVersion() { return ""; }
     }
+
+    static final int DISCOVERY_PORT = 43126;
+    static final String PROBE = "HDNOTES-DISCOVER 1";
 
     static final Pattern ASSET = Pattern.compile("^[a-f0-9-]{36}\\.(png|m4a|mp4)$");
     private static final int MAX_JSON = 16 * 1024 * 1024;
@@ -44,6 +54,7 @@ final class DeviceSync {
     private final ExecutorService pool = Executors.newCachedThreadPool();
     private volatile boolean running;
     private int failures;
+    private DatagramSocket discovery;
 
     DeviceSync(Host host) { this.host = host; this.code = String.format("%06d", new SecureRandom().nextInt(1000000)); }
 
@@ -60,11 +71,49 @@ final class DeviceSync {
             }
         }, "device-sync");
         t.setDaemon(true); t.start();
+        startDiscovery(DISCOVERY_PORT);
+    }
+
+    /** Answers PC probes on the given UDP port; returns false (manual address entry still works) when the port is taken. */
+    boolean startDiscovery(int udpPort) {
+        try {
+            DatagramSocket d = new DatagramSocket(null); d.setReuseAddress(true); d.setBroadcast(true); d.bind(new InetSocketAddress(udpPort));
+            discovery = d;
+        } catch (IOException e) { return false; }
+        final DatagramSocket d = discovery;
+        Thread t = new Thread(() -> {
+            byte[] buf = new byte[512];
+            while (running && !d.isClosed()) {
+                try {
+                    DatagramPacket p = new DatagramPacket(buf, buf.length); d.receive(p);
+                    if (!PROBE.equals(new String(p.getData(), p.getOffset(), p.getLength(), StandardCharsets.UTF_8).trim())) continue;
+                    byte[] answer = bytes(announce());
+                    d.send(new DatagramPacket(answer, answer.length, p.getAddress(), p.getPort()));
+                } catch (IOException e) { if (!running || d.isClosed()) return; }
+            }
+        }, "device-sync-discovery");
+        t.setDaemon(true); t.start();
+        return true;
+    }
+
+    /** Discovery answer / GET /v1/info body: {"app":"HDnotes","platform":"android","name","id","version","port"}. No secrets. */
+    String announce() {
+        return "{\"app\":\"HDnotes\",\"platform\":\"android\",\"name\":" + quote(host.deviceName()) + ",\"id\":" + quote(host.deviceId())
+            + ",\"version\":" + quote(host.appVersion()) + ",\"port\":" + port() + "}";
+    }
+
+    static String quote(String s) {
+        StringBuilder b = new StringBuilder("\"");
+        for (char c : (s == null ? "" : s).toCharArray()) {
+            if (c == '"' || c == '\\') b.append('\\').append(c); else if (c < 0x20) b.append(String.format("\\u%04x", (int) c)); else b.append(c);
+        }
+        return b.append('"').toString();
     }
 
     void stop() {
         running = false;
         try { if (server != null) server.close(); } catch (IOException ignored) { }
+        if (discovery != null) discovery.close();
         pool.shutdownNow();
     }
 
@@ -128,6 +177,7 @@ final class DeviceSync {
 
     private void route(String method, String path, long length, InputStream in, OutputStream out) throws Exception {
         int q = path.indexOf('?'); String query = q >= 0 ? path.substring(q + 1) : null; if (q >= 0) path = path.substring(0, q);
+        if (method.equals("GET") && path.equals("/v1/info")) { reply(out, 200, "application/json", bytes(announce())); return; }
         if (method.equals("GET") && path.equals("/v1/library")) { reply(out, 200, "application/json", bytes(host.listLibrary())); return; }
         if (path.equals("/v1/pdf") || path.equals("/v1/note")) {
             String rel = null;

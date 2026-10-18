@@ -84,9 +84,15 @@ public class InlineTextTest {
         activity.onElementTapped(e);View handle=byTag("inline_delete");assertNotNull("글상자 모서리에 삭제 버튼이 있습니다",handle);assertEquals("글상자 삭제",handle.getContentDescription().toString());
         handle.performClick();assertTrue(store.elements.isEmpty());assertNull(byTag("inline_text"));assertNull(byTag("inline_delete"));
     }
+    @Test public void handlesStaySmallOnAPhoneAndNextToSmallText()throws Exception{
+        AnnotationStore.PageElement e=new AnnotationStore.PageElement();e.page=0;e.text="작은 글";e.left=.1f;e.top=.4f;e.right=.6f;e.bottom=.5f;store.elements.add(e);
+        activity.onElementTapped(e);View handle=byTag("inline_delete");assertTrue("휴대폰에서는 버튼이 예전(30dp)보다 작습니다",handle.getLayoutParams().width<=22&&handle.getLayoutParams().width>=18);
+        Method size=MainActivity.class.getDeclaredMethod("inlineHandleSize",int.class);size.setAccessible(true);
+        assertEquals("작은 글상자 옆에서는 최소 크기로 줄어듭니다",18,(int)(Integer)size.invoke(activity,8));assertEquals(22,(int)(Integer)size.invoke(activity,200));
+    }
     @Test public void sidePanelHostsSearchPagesOutlineAndRecordings()throws Exception{
         View side=byTag("side_panel");assertEquals(View.GONE,side.getVisibility());
-        byDescription(root,"페이지 목록").performClick();assertEquals(View.VISIBLE,side.getVisibility());assertTrue(((TextView)byTag("side_title")).getText().toString().endsWith("미리보기"));assertEquals(View.VISIBLE,byTag("side_more").getVisibility());
+        invoke("toggleSidebar");assertEquals(View.VISIBLE,side.getVisibility());assertTrue(((TextView)byTag("side_title")).getText().toString().endsWith("미리보기"));assertEquals(View.VISIBLE,byTag("side_more").getVisibility());
         byTag("side_tab:2").performClick();assertNotNull(byTag("outline_add"));assertEquals(View.GONE,byTag("side_more").getVisibility());assertTrue(((TextView)byTag("side_title")).getText().toString().endsWith("개요"));
         byTag("side_tab:3").performClick();assertNotNull(byTag("record_button"));assertTrue(((TextView)byTag("side_title")).getText().toString().endsWith("음성 녹음"));
         byTag("side_tab:0").performClick();assertEquals(View.VISIBLE,byTag("search_panel").getVisibility());assertNotNull(byTag("search_input"));
@@ -96,7 +102,7 @@ public class InlineTextTest {
     @Test public void audioNoteTapsOpenAPlayerAndListedRecordingsCanBeDeleted()throws Exception{
         AnnotationStore.PageElement clip=new AnnotationStore.PageElement();clip.page=0;clip.kind="audio";clip.asset=UUID.randomUUID()+".m4a";clip.text="0:12";clip.left=.04f;clip.top=.03f;clip.right=.42f;clip.bottom=.075f;store.elements.add(clip);
         activity.onElementTapped(clip);AlertDialog player=(AlertDialog)org.robolectric.shadows.ShadowDialog.getLatestDialog();assertNotNull(player);assertEquals("녹음 파일이 없으면 안내 대화상자가 열립니다","녹음",player.getTitleText().toString());player.dismiss();
-        byDescription(root,"페이지 목록").performClick();byTag("side_tab:3").performClick();assertNotNull("첨부한 녹음이 목록에 보입니다",byTag("recording_item"));
+        invoke("toggleSidebar");byTag("side_tab:3").performClick();assertNotNull("첨부한 녹음이 목록에 보입니다",byTag("recording_item"));
         byDescription(root,"녹음 관리").performClick();java.lang.reflect.Method del=activity.getClass().getDeclaredMethod("deleteRecording",AnnotationStore.PageElement.class);del.setAccessible(true);del.invoke(activity,clip);assertTrue(store.elements.isEmpty());assertNull(byTag("recording_item"));
     }
     @Test public void headerTitleRenamesAndLassoIsOnTheMainToolbar()throws Exception{

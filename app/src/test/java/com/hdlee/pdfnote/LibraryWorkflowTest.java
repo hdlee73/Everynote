@@ -33,6 +33,9 @@ public class LibraryWorkflowTest {
         try(PDDocument pdf=PDDocument.load(file)){assertEquals(2,pdf.getNumberOfPages());assertEquals(contents(pdf.getPage(0)),contents(pdf.getPage(1)));assertTrue(contents(pdf.getPage(1)).contains(" l"));}
         AnnotationStore restored=new AnnotationStore(RuntimeEnvironment.getApplication());restored.open(Uri.fromFile(file));assertEquals("keep my notes",restored.elements.get(0).text);
     }
+    @Test public void modifiedTimeInSecondsIsReadAsMilliseconds(){
+        assertEquals(1_792_000_000_000L,LibraryRepository.millis(1_792_000_000L));assertEquals(1_792_000_000_000L,LibraryRepository.millis(1_792_000_000_000L));assertEquals(0L,LibraryRepository.millis(0L));
+    }
     @Test public void allPaperKindsAreActualPdfPages()throws Exception{
         for(int kind=0;kind<3;kind++){File file=library.createNote(folder,"Paper "+kind,new NotebookFiles.Paper(kind,NotebookFiles.COLORS[3]));try(PDDocument pdf=PDDocument.load(file)){String content=contents(pdf.getPage(0));assertTrue(content.contains(" re"));assertEquals(kind!=0,content.contains(" l"));assertEquals(1,pdf.getNumberOfPages());}}
     }
