@@ -150,6 +150,10 @@ final class Shapes {
         Table t = Table.parse(text);
         float cw = b.width() / t.cols, ch = b.height() / t.rows;
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float rad = Math.max(2f, Math.min(pageWidth * .02f, Math.min(ch * .5f, cw * .5f)));   // Samsung Notes: rounded outer corners
+        int save = c.save();
+        android.graphics.Path outline = new android.graphics.Path(); outline.addRoundRect(b, rad, rad, android.graphics.Path.Direction.CW);
+        c.clipPath(outline);
         if ((t.fill >>> 24) > 0) { paint.setColor(t.fill); c.drawRect(b, paint); }
         if ((t.head >>> 24) > 0) { paint.setColor(t.head); c.drawRect(b.left, b.top, b.right, b.top + ch, paint); }
         for (int r = 0; r < t.rows; r++) for (int col = 0; col < t.cols; col++) {
@@ -157,9 +161,10 @@ final class Shapes {
             if ((color >>> 24) == 0) continue;
             paint.setColor(color); c.drawRect(b.left + col * cw, b.top + r * ch, b.left + (col + 1) * cw, b.top + (r + 1) * ch, paint);
         }
+        c.restoreToCount(save);
         float width = Math.max(1f, pageWidth * .0022f);
         paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(width); paint.setColor(AnnotationPainter.adj(t.line));
-        c.drawRect(b, paint);
+        c.drawRoundRect(b, rad, rad, paint);
         for (int i = 1; i < t.rows; i++) c.drawLine(b.left, b.top + i * ch, b.right, b.top + i * ch, paint);
         for (int j = 1; j < t.cols; j++) c.drawLine(b.left + j * cw, b.top, b.left + j * cw, b.bottom, paint);
         Paint tp = new Paint(Paint.ANTI_ALIAS_FLAG);

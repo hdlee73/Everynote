@@ -23,7 +23,7 @@ import java.util.List;
  * or directly above it (bottom-toolbar menus).
  */
 final class AnchoredMenu {
-    static final int INK = 0xFF1C1C1E, ACCENT = 0xFF007AFF, GRAY = 0xFF8E8E93, LINE = 0xFFE5E5EA, RED = 0xFFFF3B30;
+    static final int INK = 0xFF010102, ACCENT = 0xFF387AFF, GRAY = 0xFF848487, LINE = 0xFFE5E5EA, RED = 0xFFFF3B30;
 
     static final class Row {
         final String label; final int icon; final Runnable action; boolean selected, danger, submenu, divider; View custom; int tint; List<Row> children;

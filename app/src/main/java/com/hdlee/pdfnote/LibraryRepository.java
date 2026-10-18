@@ -67,6 +67,8 @@ final class LibraryRepository {
     List<TrashItem> trashItems(){List<TrashItem> result=new ArrayList<>();for(File file:list(trashFolder()))if(file.isFile()){try{JSONObject info=new JSONObject(preferences.getString("trash:"+file.getAbsolutePath(),"{}"));result.add(new TrashItem(file,info.optString("name",file.getName()),info.optString("parent",root.getAbsolutePath()),info.optLong("deleted",file.lastModified())));}catch(JSONException ignored){result.add(new TrashItem(file,file.getName(),root.getAbsolutePath(),file.lastModified()));}}result.sort(Comparator.comparingLong((TrashItem t)->t.deleted).reversed());return result;}
     /** Permanently deletes everything in the trash; returns how many documents were removed. */
     synchronized int emptyTrash(){int count=0;android.content.SharedPreferences.Editor edit=preferences.edit();for(File file:list(trashFolder()))if(file.isFile()){String key="trash:"+file.getAbsolutePath();if(file.delete()){count++;edit.remove(key);}}edit.commit();return count;}
+    /** Permanently deletes one document from the trash. */
+    synchronized boolean deleteForever(TrashItem item){if(!inTrash(item.file))return false;boolean ok=item.file.delete();if(ok)preferences.edit().remove("trash:"+item.file.getAbsolutePath()).commit();return ok;}
     synchronized File restore(TrashItem item)throws IOException,JSONException{
         if(!inTrash(item.file))throw new IOException("휴지통 문서가 아닙니다");File destination=new File(item.parent);if(!destination.isDirectory()||!(destination.equals(root)||managed(destination)))destination=root;File target=NotebookFiles.unique(destination,NotebookFiles.pdfName(item.name));File restored=transfer(item.file,destination,target.getName(),true);preferences.edit().remove("trash:"+item.file.getAbsolutePath()).commit();return restored;
     }
@@ -112,6 +114,42 @@ final class LibraryRepository {
     }
     private void cloneAnnotations(Uri source,Uri target,int count)throws JSONException{
         AnnotationStore original=new AnnotationStore(context);original.open(source);AnnotationStore clone=new AnnotationStore(context);clone.open(target);clone.importJson(original.exportJson(source,"PDF"),count);
+    }
+    int pageCount(File file)throws IOException{return NotebookFiles.pageCount(context,file);}
+    /** Creates a new document in [folder] from the listed pages of [sources]; their annotations travel with the pages. Returns the new file. */
+    synchronized File compose(File folder,String title,List<File> sources,List<int[]> pages)throws IOException,JSONException{
+        folder(folder);for(File source:sources)if(!managed(source)||!source.isFile())throw new IOException("저장된 PDF를 선택하세요");
+        File target=NotebookFiles.unique(folder,NotebookFiles.pdfName(title));int count=NotebookFiles.compose(context,target,sources,pages);
+        try{
+            List<String> exported=new ArrayList<>();
+            for(File source:sources){AnnotationStore store=new AnnotationStore(context);Uri uri=Uri.fromFile(source);store.open(uri);exported.add(store.exportJson(uri,"PDF"));}
+            AnnotationStore merged=new AnnotationStore(context);merged.open(Uri.fromFile(target));merged.importJson(AnnotationStore.compose(exported,pages),count);
+        }catch(JSONException error){target.delete();throw error;}
+        return target;
+    }
+    /** Copies the PDFs found under the document tree [tree] into [destination], recreating its sub-folders. Returns how many were imported. */
+    int importTree(Uri tree,File destination)throws IOException,JSONException{
+        folder(destination);String rootId=android.provider.DocumentsContract.getTreeDocumentId(tree);
+        Uri rootUri=android.provider.DocumentsContract.buildDocumentUriUsingTree(tree,rootId);String rootName=rootId.substring(rootId.lastIndexOf(':')+1);rootName=rootName.substring(rootName.lastIndexOf('/')+1);
+        File top=new File(destination,NotebookFiles.name(rootName.isEmpty()?"가져온 폴더":rootName));if(!top.isDirectory()&&!top.mkdir())throw new IOException("폴더를 만들 수 없습니다");
+        return importChildren(tree,rootId,top);
+    }
+    private int importChildren(Uri tree,String parentId,File into)throws IOException,JSONException{
+        int count=0;Uri children=android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree,parentId);
+        List<String[]> entries=new ArrayList<>();
+        try(android.database.Cursor c=context.getContentResolver().query(children,new String[]{android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE},null,null,null)){
+            while(c!=null&&c.moveToNext())entries.add(new String[]{c.getString(0),c.getString(1),c.getString(2)});
+        }
+        for(String[] e:entries){
+            if(e[1]==null||e[1].startsWith("."))continue;
+            if(android.provider.DocumentsContract.Document.MIME_TYPE_DIR.equals(e[2])){
+                File sub=new File(into,NotebookFiles.name(e[1]));if(!sub.isDirectory()&&!sub.mkdir())continue;
+                int n=importChildren(tree,e[0],sub);count+=n;if(n==0)sub.delete();
+            }else if(e[1].toLowerCase(Locale.ROOT).endsWith(".pdf")){
+                try{importPdf(android.provider.DocumentsContract.buildDocumentUriUsingTree(tree,e[0]),e[1],into);count++;}catch(IOException|JSONException|RuntimeException ignored){}
+            }
+        }
+        return count;
     }
     synchronized int insertPage(File file,NotebookFiles.Paper requested,int afterIndex)throws IOException{return insertPage(file,requested,afterIndex,0);}
     synchronized int insertPage(File file,NotebookFiles.Paper requested,int afterIndex,int sizeMode)throws IOException{

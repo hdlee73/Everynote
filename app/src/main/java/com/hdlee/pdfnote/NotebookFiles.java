@@ -125,6 +125,25 @@ final class NotebookFiles {
             replace(temp,file);return count;
         }finally{temp.delete();}
     }
+    /** Number of pages of a PDF. */
+    static int pageCount(Context context,File file)throws IOException{
+        try(PDDocument pdf=PDDocument.load(file,MemoryUsageSetting.setupTempFileOnly().setTempDir(context.getCacheDir()))){return pdf.getNumberOfPages();}
+    }
+    /** Writes [target] made of the listed 0-based pages of each source PDF, in order. Returns the page count. */
+    static int compose(Context context,File target,java.util.List<File> sources,java.util.List<int[]> pages)throws IOException{
+        File temp=File.createTempFile(".compose-",".tmp",target.getParentFile());java.util.List<PDDocument> open=new java.util.ArrayList<>();int count;
+        try{
+            try(PDDocument out=new PDDocument(MemoryUsageSetting.setupTempFileOnly().setTempDir(context.getCacheDir()))){
+                for(int i=0;i<sources.size();i++){
+                    PDDocument source=PDDocument.load(sources.get(i),MemoryUsageSetting.setupTempFileOnly().setTempDir(context.getCacheDir()));open.add(source);
+                    for(int page:pages.get(i)){if(page<0||page>=source.getNumberOfPages())throw new IOException("없는 페이지입니다: "+(page+1));out.importPage(source.getPage(page));}
+                }
+                count=out.getNumberOfPages();if(count==0)throw new IOException("만들 페이지가 없습니다");
+                out.save(temp);
+            }
+            replace(temp,target);return count;
+        }finally{for(PDDocument d:open)try{d.close();}catch(IOException ignored){}temp.delete();}
+    }
     static void replace(File temp,File target)throws IOException{
         try{Files.move(temp.toPath(),target.toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
         catch(AtomicMoveNotSupportedException error){Files.move(temp.toPath(),target.toPath(),StandardCopyOption.REPLACE_EXISTING);}

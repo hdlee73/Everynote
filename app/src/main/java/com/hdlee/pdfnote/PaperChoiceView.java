@@ -56,7 +56,7 @@ final class PaperChoiceView extends LinearLayout {
         }
         int rest = (columns - NotebookFiles.PAPER_ORDER.length % columns) % columns;
         for (int i = 0; i < rest; i++) row.addView(new View(context), new LayoutParams(0, 1, 1));
-        templateButton = new TextView(context); templateButton.setText("PDF·이미지 서식 고르기"); templateButton.setTextSize(14); templateButton.setGravity(Gravity.CENTER); templateButton.setTextColor(0xFF007AFF); templateButton.setBackground(chipBackground()); templateButton.setVisibility(GONE);
+        templateButton = new TextView(context); templateButton.setText("PDF·이미지 서식 고르기"); templateButton.setTextSize(14); templateButton.setGravity(Gravity.CENTER); templateButton.setTextColor(0xFF387AFF); templateButton.setBackground(chipBackground()); templateButton.setVisibility(GONE);
         templateButton.setOnClickListener(v -> { if (templateRequest != null) templateRequest.run(); });
         LayoutParams tp = new LayoutParams(-1, dp(44)); tp.topMargin = dp(10); content.addView(templateButton, tp);
         content.addView(section("색상", 14));
@@ -86,9 +86,9 @@ final class PaperChoiceView extends LinearLayout {
     private void styleTiles() {
         for (int i = 0; i < tiles.length; i++) {
             boolean on = i == selected; GradientDrawable bg = new GradientDrawable(); bg.setCornerRadius(dp(12));
-            if (on) { bg.setColor(0xFFEEF5FF); bg.setStroke(dp(2), 0xFF007AFF); } else bg.setColor(Color.TRANSPARENT);
+            if (on) { bg.setColor(0xFFEEF5FF); bg.setStroke(dp(2), 0xFF387AFF); } else bg.setColor(Color.TRANSPARENT);
             tiles[i].setBackground(bg); tiles[i].setSelected(on);
-            View label = ((ViewGroup) tiles[i]).getChildAt(1); if (label instanceof TextView) { ((TextView) label).setTextColor(on ? 0xFF007AFF : 0xFF3A3A3C); ((TextView) label).setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT); }
+            View label = ((ViewGroup) tiles[i]).getChildAt(1); if (label instanceof TextView) { ((TextView) label).setTextColor(on ? 0xFF387AFF : 0xFF3A3A3C); ((TextView) label).setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT); }
         }
     }
     /** Chooses a paper by its row in the list (the bundled form templates come first). */
@@ -117,8 +117,8 @@ final class PaperChoiceView extends LinearLayout {
         colors.removeAllViews();
         for(int i=0;i<NotebookFiles.COLORS.length;i++){
             final int value=NotebookFiles.COLORS[i];boolean on=color==value;
-            TextView chip=new TextView(getContext());chip.setText(on?Glyph.check(getContext(),0xFF007AFF,""):"");chip.setTextSize(18);chip.setGravity(Gravity.CENTER);chip.setContentDescription("배경색 "+NotebookFiles.COLOR_NAMES[i]);chip.setTag("paper_color:"+i);
-            GradientDrawable bg=new GradientDrawable();bg.setColor(value);bg.setCornerRadius(dp(8));bg.setStroke(dp(on?2:1),on?0xFF007AFF:0xFFCBD5E1);chip.setBackground(bg);
+            TextView chip=new TextView(getContext());chip.setText(on?Glyph.check(getContext(),0xFF387AFF,""):"");chip.setTextSize(18);chip.setGravity(Gravity.CENTER);chip.setContentDescription("배경색 "+NotebookFiles.COLOR_NAMES[i]);chip.setTag("paper_color:"+i);
+            GradientDrawable bg=new GradientDrawable();bg.setColor(value);bg.setCornerRadius(dp(8));bg.setStroke(dp(on?2:1),on?0xFF387AFF:0xFFCBD5E1);chip.setBackground(bg);
             LayoutParams lp=new LayoutParams(dp(34),dp(34));lp.setMargins(dp(2),0,dp(8),0);chip.setOnClickListener(v->{color=value;refreshColors();redraw();});colors.addView(chip,lp);
         }
     }
@@ -129,8 +129,8 @@ final class PaperChoiceView extends LinearLayout {
         for(int i=0;i<2;i++){
             final boolean land=i==1;boolean on=landscape==land;
             LinearLayout box=new LinearLayout(getContext());box.setOrientation(VERTICAL);box.setGravity(Gravity.CENTER_HORIZONTAL);box.setPadding(dp(14),dp(8),dp(14),dp(8));box.setContentDescription("레이아웃 "+labels[i]);box.setTag("paper_layout:"+(land?"land":"port"));box.setAlpha(form?.4f:1f);
-            GradientDrawable bg=new GradientDrawable();bg.setCornerRadius(dp(12));if(on&&!form){bg.setColor(0xFFEEF5FF);bg.setStroke(dp(2),0xFF007AFF);}else bg.setColor(Color.TRANSPARENT);box.setBackground(bg);
-            View icon=new View(getContext());GradientDrawable ib=new GradientDrawable();ib.setColor(Color.WHITE);ib.setCornerRadius(dp(4));ib.setStroke(dp(2),on&&!form?0xFF007AFF:0xFF8E8E93);icon.setBackground(ib);
+            GradientDrawable bg=new GradientDrawable();bg.setCornerRadius(dp(12));if(on&&!form){bg.setColor(0xFFEEF5FF);bg.setStroke(dp(2),0xFF387AFF);}else bg.setColor(Color.TRANSPARENT);box.setBackground(bg);
+            View icon=new View(getContext());GradientDrawable ib=new GradientDrawable();ib.setColor(Color.WHITE);ib.setCornerRadius(dp(4));ib.setStroke(dp(2),on&&!form?0xFF387AFF:0xFF848487);icon.setBackground(ib);
             LayoutParams ip=land?new LayoutParams(dp(36),dp(26)):new LayoutParams(dp(26),dp(36));ip.topMargin=land?dp(5):0;ip.bottomMargin=land?dp(5):0;box.addView(icon,ip);
             TextView label=new TextView(getContext());label.setText(labels[i]);label.setTextSize(12);label.setTextColor(0xFF3A3A3C);label.setGravity(Gravity.CENTER);label.setPadding(0,dp(6),0,0);box.addView(label,new LayoutParams(-2,-2));
             if(!form)box.setOnClickListener(v->{landscape=land;refreshLayout();redraw();});
@@ -149,7 +149,7 @@ final class PaperChoiceView extends LinearLayout {
             p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(1));p.setColor(0xFFCBD2DA);
             if(formBitmap!=null){canvas.drawBitmap(formBitmap,null,rect,new Paint(Paint.FILTER_BITMAP_FLAG));canvas.drawRect(rect,p);return;}
             canvas.drawRect(rect,p);
-            if(custom){p.setStyle(Paint.Style.FILL);p.setColor(0xFF8E8E93);p.setTextSize(dp(22));p.setTextAlign(Paint.Align.CENTER);canvas.drawText(template==null?"+":"✓",rect.centerX(),rect.centerY()+dp(7),p);return;}
+            if(custom){p.setStyle(Paint.Style.FILL);p.setColor(0xFF848487);p.setTextSize(dp(22));p.setTextAlign(Paint.Align.CENTER);canvas.drawText(template==null?"+":"✓",rect.centerX(),rect.centerY()+dp(7),p);return;}
             boolean dark=Color.red(color)+Color.green(color)+Color.blue(color)<300;p.setStrokeWidth(1);
             for(float[] seg:NotebookFiles.layout(paperKind,ptW,ptH)){int[] c=NotebookFiles.ruleColor((int)seg[4]);p.setColor(dark?Color.rgb(Math.min(255,c[0]/2+90),Math.min(255,c[1]/2+90),Math.min(255,c[2]/2+90)):Color.rgb(c[0],c[1],c[2]));
                 float x1=rect.left+seg[0]*pw/ptW,y1=rect.bottom-seg[1]*ph/ptH,x2=rect.left+seg[2]*pw/ptW,y2=rect.bottom-seg[3]*ph/ptH;

@@ -25,7 +25,7 @@ import android.widget.TextView;
  */
 final class AlertDialog extends Dialog {
     static final int BUTTON_POSITIVE = DialogInterface.BUTTON_POSITIVE, BUTTON_NEGATIVE = DialogInterface.BUTTON_NEGATIVE, BUTTON_NEUTRAL = DialogInterface.BUTTON_NEUTRAL;
-    private static final int ACCENT = 0xFF007AFF, INK = 0xFF1C1C1E, GRAY = 0xFF8E8E93, LINE = 0xFFE5E5EA;
+    private static final int ACCENT = 0xFF387AFF, INK = 0xFF010102, GRAY = 0xFF848487, LINE = 0xFFE4E4E7;
     private final TextView[] buttons = new TextView[3];
     private final boolean sheet;
     private TextView titleView, messageView;
@@ -79,7 +79,7 @@ final class AlertDialog extends Dialog {
         private int dp(float v) { return Math.round(v * density); }
         private GradientDrawable round(int color, int radius) { GradientDrawable g = new GradientDrawable(); g.setColor(color); g.setCornerRadius(dp(radius)); return g; }
         private android.graphics.drawable.Drawable pressable(float[] radii) {
-            GradientDrawable on = new GradientDrawable(); on.setColor(0xFFF2F2F7); on.setCornerRadii(radii);
+            GradientDrawable on = new GradientDrawable(); on.setColor(0xFFF2F2F4); on.setCornerRadii(radii);
             android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
             states.addState(new int[]{android.R.attr.state_pressed}, on); states.addState(new int[0], new ColorDrawable(Color.TRANSPARENT)); return states;
         }
@@ -95,7 +95,7 @@ final class AlertDialog extends Dialog {
                 final int slot = i;
                 TextView b = new TextView(context); b.setTextSize(17); b.setGravity(Gravity.CENTER); b.setTextAlignment(View.TEXT_ALIGNMENT_CENTER); b.setIncludeFontPadding(false); b.setSingleLine(); b.setEllipsize(android.text.TextUtils.TruncateAt.END); b.setText(labels[i]); b.setContentDescription(labels[i]); b.setPadding(dp(8), 0, dp(8), 0); b.setTag("dialog_button");
                 b.setTextColor(ACCENT); b.setTypeface(i == 0 ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-                if (i == 1 && labels[i] != null && labels[i].toString().contains("삭제")) b.setTextColor(0xFFFF3B30);
+                if (i == 1 && labels[i] != null && labels[i].toString().contains("삭제")) b.setTextColor(0xFFDB332A);
                 b.setOnClickListener(v -> { if (listeners[slot] != null) listeners[slot].onClick(dialog, which[slot]); dialog.dismiss(); });
                 dialog.buttons[i] = b;
             }
@@ -152,13 +152,13 @@ final class AlertDialog extends Dialog {
         }
         private int tintFor(CharSequence text) {
             String t = text == null ? "" : text.toString();
-            if (t.contains("삭제") || t.contains("비우기")) return 0xFFFF3B30;
+            if (t.contains("삭제") || t.contains("비우기")) return 0xFFDB332A;
             if (t.contains("복원") || t.contains("불러오기") || t.contains("가져오기")) return 0xFF34C759;
             if (t.contains("내보내") || t.contains("공유") || t.contains("저장") || t.contains("PDF")) return 0xFF34C759;
-            if (t.contains("Word")) return 0xFF007AFF;
+            if (t.contains("Word")) return 0xFF387AFF;
             if (t.contains("Excel") || t.contains("CSV") || t.contains("Markdown")) return 0xFF30B0C7;
             if (t.contains("색")) return 0xFFAF52DE;
-            return 0xFF8E8E93;
+            return 0xFF848487;
         }
         private View sheet(AlertDialog dialog) {
             FrameLayout root = new FrameLayout(context); root.setTag("action_sheet");
@@ -186,9 +186,9 @@ final class AlertDialog extends Dialog {
             for (int slot : new int[]{0, 2, 1}) if (labels[slot] != null) {
                 TextView b = dialog.buttons[slot]; b.setGravity(Gravity.CENTER_VERTICAL); b.setTextSize(15); b.setPadding(dp(12), 0, dp(12), 0);
                 String label = labels[slot].toString(); boolean danger = label.contains("삭제") || label.contains("비우기");
-                b.setTextColor(danger ? 0xFFFF3B30 : slot == 1 ? GRAY : ACCENT); b.setTypeface(Typeface.DEFAULT);
+                b.setTextColor(danger ? 0xFFDB332A : slot == 1 ? GRAY : ACCENT); b.setTypeface(Typeface.DEFAULT);
                 int icon = danger ? R.drawable.ic_delete : slot == 1 ? R.drawable.ic_close : iconFor(label);
-                if (icon != 0) { android.graphics.drawable.Drawable d = context.getResources().getDrawable(icon, null).mutate(); d.setTint(danger ? 0xFFFF3B30 : slot == 1 ? GRAY : tintFor(label)); d.setBounds(0, 0, dp(20), dp(20)); b.setCompoundDrawablesRelative(d, null, null, null); b.setCompoundDrawablePadding(dp(12)); }
+                if (icon != 0) { android.graphics.drawable.Drawable d = context.getResources().getDrawable(icon, null).mutate(); d.setTint(danger ? 0xFFDB332A : slot == 1 ? GRAY : tintFor(label)); d.setBounds(0, 0, dp(20), dp(20)); b.setCompoundDrawablesRelative(d, null, null, null); b.setCompoundDrawablePadding(dp(12)); }
                 card.addView(b, new LinearLayout.LayoutParams(-1, dp(44)));
             }
             root.addView(card, new FrameLayout.LayoutParams(-1, -2));
