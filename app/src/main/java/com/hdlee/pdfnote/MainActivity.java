@@ -266,7 +266,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         studySplit=new LinearLayout(this);studySplit.addView(pdfArea);buildStudyPanel();studySplit.addView(studyPanel);
         workRow=new LinearLayout(this);workRow.setTag("work_row");workRow.addView(studySplit,new LinearLayout.LayoutParams(0,-1,1));content.addView(workRow,new LinearLayout.LayoutParams(-1,0,1));layoutStudyPanel();
         bottomBar=new LinearLayout(this);bottomBar.setTag("reading_toolbar");bottomBar.setGravity(Gravity.CENTER_VERTICAL);bottomBar.setPadding(dp(6),0,dp(6),0);barSurface=new GradientDrawable();barSurface.setColor(Color.WHITE);barSurface.setCornerRadii(new float[]{dp(22),dp(22),dp(22),dp(22),0,0,0,0});bottomBar.setBackground(barSurface);bottomBar.setElevation(dp(8));
-        readBar=new LinearLayout(this);readBar.setTag("read_bar");readBar.setGravity(Gravity.CENTER_VERTICAL);writeBar=new LinearLayout(this);writeBar.setTag("writing_toolbar");writeBar.setGravity(Gravity.CENTER_VERTICAL);writeBar.setVisibility(View.VISIBLE);writeBar.setTag("writing_toolbar");
+        readBar=new ToolStripLayout.Row(this);readBar.setTag("read_bar");readBar.setGravity(Gravity.CENTER_VERTICAL);writeBar=new LinearLayout(this);writeBar.setTag("writing_toolbar");writeBar.setGravity(Gravity.CENTER_VERTICAL);writeBar.setVisibility(View.VISIBLE);writeBar.setTag("writing_toolbar");
         // page number: a small pill at the bottom of the page, as in the Windows version
         pageLabel=new TextView(this);pageLabel.setTag("page_indicator");pageLabel.setGravity(Gravity.CENTER);pageLabel.setIncludeFontPadding(false);pageLabel.setPadding(dp(12),0,dp(12),0);pageLabel.setTextColor(0xFF3A3A3C);pageLabel.setTextSize(12);pageLabel.setSingleLine();pageLabel.setBackground(round(0xF2FFFFFF,13));pageLabel.setElevation(dp(2));pageLabel.setContentDescription("페이지 이동");
         pageLabel.setOnClickListener(v->{if(renderer==null)showAddDocumentMenu();else showPageJumpMenu(v);});FrameLayout.LayoutParams pageParams=new FrameLayout.LayoutParams(-2,dp(26),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);pageParams.bottomMargin=dp(12);viewport.addView(pageLabel,pageParams);
@@ -304,7 +304,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         LinearLayout.LayoutParams optionsParams=new LinearLayout.LayoutParams(dp(280),-2);optionsParams.topMargin=dp(6);stripBox.addView(inkOptions,optionsParams);
         FrameLayout.LayoutParams stripParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);stripParams.topMargin=dp(8);viewport.addView(stripBox,stripParams);
         barGrip=makeGrip(bottomBar,"bar");barGrip.setVisibility(View.GONE);barMenuButton=icon(R.drawable.ic_grip_h,"도구 모음 위치·방향",MUTED,v->showBarLayoutMenu(v));barMenuButton.setTag("bar_layout");barMenuButton.setPadding(dp(6),dp(4),dp(6),dp(4));
-        barScrollH=new HorizontalScrollView(this);barScrollH.setHorizontalScrollBarEnabled(false);barScrollH.setFillViewport(true);barScrollV=new ScrollView(this);barScrollV.setVerticalScrollBarEnabled(false);barScrollV.setFillViewport(true);
+        barScrollH=new ToolStripLayout.Horizontal(this);barScrollH.setHorizontalScrollBarEnabled(false);barScrollH.setFillViewport(true);barScrollV=new ToolStripLayout.Vertical(this);barScrollV.setVerticalScrollBarEnabled(false);barScrollV.setFillViewport(true);
         content.addView(bottomBar,new LinearLayout.LayoutParams(-1,dp(52)));
         // full screen (Samsung Notes, as in HDnotes for Windows): the top bar and tabs go away, the tool strip stays where it is; one round button at the top right leaves it
         fullscreenExit=icon(R.drawable.ic_fullscreen_exit,"전체 화면 종료",0xFF252525,v->toggleFullscreen());fullscreenExit.setTag("fullscreen_exit");fullscreenExit.setPadding(dp(8),dp(8),dp(8),dp(8));fullscreenExit.setBackground(round(Color.WHITE,18));fullscreenExit.setElevation(dp(4));fullscreenExit.setVisibility(View.GONE);
@@ -601,7 +601,23 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
             AnchoredMenu.Row.divider(),
             new AnchoredMenu.Row("페이지 추가",R.drawable.ic_page_add,()->choosePageToInsert(currentPage)).tint(NAVY),
             new AnchoredMenu.Row("다른 형식으로 페이지 추가",R.drawable.ic_page_add,()->chooseOtherPageFormat(currentPage)).tint(NAVY),
+            AnchoredMenu.Row.divider(),
+            new AnchoredMenu.Row("현재 페이지 발췌하여 새 파일",R.drawable.ic_page_add,this::extractCurrentPages).tint(NAVY),
+            new AnchoredMenu.Row("다른 문서와 합치기",R.drawable.ic_page_add,this::mergeWithOthers).tint(NAVY),
             new AnchoredMenu.Row("페이지 삭제",R.drawable.ic_delete,()->confirmDeletePage(currentPage)).danger()),null);
+    }
+    /** 페이지 발췌: the shown page (or the page numbers asked for) of the open library document becomes a new document. */
+    private void extractCurrentPages(){
+        DocumentSession session=activeSession;if(session==null||!library.managed(session.uri)){toast("문서함에 저장된 문서에서만 사용할 수 있습니다");return;}
+        if(session.store!=null)session.store.save();
+        PageTools.extract(this,library,new File(session.uri.getPath()),library.root,String.valueOf(currentPage+1),()->{if(libraryDialog!=null&&libraryDialog.isShowing())libraryDialog.reload();},file->{if(file!=null)openPdf(Uri.fromFile(file));});
+    }
+    /** 문서 합치기: the open document followed by other library documents picked in the shelf's selection mode. */
+    private void mergeWithOthers(){
+        DocumentSession session=activeSession;File self=session!=null&&library.managed(session.uri)?new File(session.uri.getPath()):null;
+        if(session!=null&&session.store!=null)session.store.save();
+        toast("문서함에서 합칠 문서를 선택하세요 (선택 > ⋮ > 문서 합치기)");
+        showLibrary();if(libraryDialog!=null)libraryDialog.beginSelection(self);
     }
     private List<AnchoredMenu.Row> shareRows(){return AnchoredMenu.rows(
         new AnchoredMenu.Row("PDF로 공유 (주석 포함)",R.drawable.ic_pdf,this::exportPdf).tint(NAVY),
@@ -617,7 +633,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         new AnchoredMenu.Row("모든 문서 복원",R.drawable.ic_import,this::startLibraryRestore).tint(NAVY));}
     private void showShareMenu(View anchor){if(renderer==null){toast("문서를 먼저 여세요");return;}AnchoredMenu.show(this,anchor,!inHeader(anchor),shareRows(),null);}
     private void showSaveMenu(View anchor){if(renderer==null){toast("문서를 먼저 여세요");return;}AnchoredMenu.show(this,anchor,!inHeader(anchor),saveRows(),null);}
-    private List<AnchoredMenu.Row> libraryBackupRows(){return AnchoredMenu.rows(new AnchoredMenu.Row("모든 문서 백업",R.drawable.ic_backup,this::startLibraryBackup).tint(NAVY),new AnchoredMenu.Row("모든 문서 복원",R.drawable.ic_import,this::startLibraryRestore).tint(NAVY));}
+    private List<AnchoredMenu.Row> libraryBackupRows(){return AnchoredMenu.rows(new AnchoredMenu.Row("다른 기기와 동기화",R.drawable.ic_sync,this::showDeviceSync).tint(NAVY),new AnchoredMenu.Row("모든 문서 백업",R.drawable.ic_backup,this::startLibraryBackup).tint(NAVY),new AnchoredMenu.Row("모든 문서 복원",R.drawable.ic_import,this::startLibraryRestore).tint(NAVY));}
     private List<AnchoredMenu.Row> rowsOf(int category){List<AnchoredMenu.Row> rows=new ArrayList<>();for(Tile t:categoryTiles(category)){AnchoredMenu.Row r=new AnchoredMenu.Row(t.label,t.icon,t.action).selected(t.selected);if(t.tint!=0)r.danger();rows.add(r);}return rows;}
     /** Compact top-right menu: the common actions, with the long tail grouped into sub menus. */
     private void showMainMenu(View anchor,boolean above){
@@ -1417,7 +1433,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
             mark.noteOnly?"메모 삭제":"하이라이트 삭제",()->{store.marks.remove(mark);store.save();pageView.invalidate();toast(mark.noteOnly?"메모를 삭제했습니다":"하이라이트를 삭제했습니다");},"표시 설정",()->showMemoDisplayOptions(mark));
     }
     private void showMemoDisplayOptions(AnnotationStore.Mark mark){String[] choices={"펼쳐서 표시","최소화","숨기기"};int checked=!mark.visible?2:(mark.minimized?1:0);showActionSheet("메모 포스트잇 표시",choices,checked,w->{mark.visible=w!=2;mark.minimized=w==1;store.save();pageView.invalidate();});}
-    private List<AnchoredMenu.Row> addDocumentRows(){return AnchoredMenu.rows(new AnchoredMenu.Row("새 노트 만들기",R.drawable.ic_compose,this::newNotebook).tint(NAVY),new AnchoredMenu.Row("파일 가져오기",R.drawable.ic_import,this::choosePdf).tint(NAVY),new AnchoredMenu.Row("저장된 문서 열기",R.drawable.ic_folder_open,this::showLibrary).tint(NAVY));}
+    private List<AnchoredMenu.Row> addDocumentRows(){return AnchoredMenu.rows(new AnchoredMenu.Row("새 노트 만들기",R.drawable.ic_compose,this::newNotebook).tint(NAVY),new AnchoredMenu.Row("파일 가져오기",R.drawable.ic_import,this::choosePdf).tint(NAVY),new AnchoredMenu.Row("폴더 일괄 불러오기",R.drawable.ic_import,()->chooseFolderToImport(library.root)).tint(NAVY),new AnchoredMenu.Row("저장된 문서 열기",R.drawable.ic_folder_open,this::showLibrary).tint(NAVY));}
     private void showAddDocumentMenu(){AnchoredMenu.showCentered(this,getWindow().getDecorView(),"문서 추가",addDocumentRows());}
     private void showOutlineList(){
         if(store==null){toast("PDF를 먼저 여세요");return;}
@@ -1590,6 +1606,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
             public void backedOut(){exitArmed=true;}
             public void backupFolder(File folder){startFolderBackup(folder);}
             public void restoreBackup(){startLibraryRestore();}
+            public void deviceSync(){showDeviceSync();}
             public void settings(){showSettings();}
             public void removed(List<File> files){for(DocumentSession session:new ArrayList<>(sessions))if(files.contains(new File(session.uri.getPath())))closeDocument(session);}
         });libraryDialog.show();
@@ -2733,7 +2750,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     /** One scrolling sheet with every tool group, so any feature is a single tap away. */
     private void showTools(){
         List<Section> sections=new ArrayList<>();
-        if(renderer==null)sections.add(sectionOf(0,true));
+        if(renderer==null)sections.add(sectionOf(0,true).add(new Tile("다른 기기와 동기화",R.drawable.ic_sync,this::showDeviceSync)));
         else for(int category=0;category<CATEGORY_TITLES.length;category++)sections.add(sectionOf(category,true));
         boolean awake=recentPrefs.getBoolean("keep_awake",false);
         sections.add(new Section("읽기 편의").add(new Tile("화면 켜 둠",R.drawable.ic_clock,()->{recentPrefs.edit().putBoolean("keep_awake",!awake).apply();applyKeepAwake();toast(!awake?"읽는 동안 화면이 꺼지지 않습니다":"화면 자동 꺼짐을 따릅니다");}).selected(awake)).add(new Tile("도구 모음 위치·방향",R.drawable.ic_float,()->showBarLayoutMenu(bottomBar))));
@@ -3296,6 +3313,12 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
                 if(f.isDirectory())collect(f,rel+"/",out);
                 else{org.json.JSONObject o=new org.json.JSONObject();o.put("path",rel);o.put("size",f.length());o.put("mtime",LibraryRepository.modifiedTime(MainActivity.this,f));out.put(o);}}}
         @Override public String listLibrary()throws Exception{org.json.JSONArray out=new org.json.JSONArray();collect(library.root,"",out);return out.toString();}
+        private void collectFolders(File dir,String prefix,org.json.JSONArray out){for(File f:library.list(dir))if(f.isDirectory()){String rel=prefix+f.getName();out.put(rel);collectFolders(f,rel+"/",out);}}
+        @Override public String listFolders()throws Exception{org.json.JSONArray out=new org.json.JSONArray();collectFolders(library.root,"",out);return out.toString();}
+        @Override public boolean makeFolder(String rel){
+            if(rel==null||rel.isEmpty()||rel.length()>400||rel.startsWith("/")||rel.contains("\\")||rel.contains("\0"))return false;
+            for(String part:rel.split("/",-1))if(part.isEmpty()||part.equals(".")||part.equals("..")||part.startsWith("."))return false;
+            File f=new File(library.root,rel);if(!library.managed(f))return false;return f.isDirectory()||f.mkdirs();}
         @Override public File libraryFile(String rel){
             if(rel==null||rel.isEmpty()||rel.length()>400||rel.startsWith("/")||rel.contains("\\")||rel.contains("\0")||!rel.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf"))return null;
             for(String part:rel.split("/",-1))if(part.isEmpty()||part.equals(".")||part.equals("..")||part.startsWith("."))return null;
@@ -3303,6 +3326,20 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         @Override public boolean isOpen(String rel)throws Exception{
             final File f=libraryFile(rel);if(f==null)return false;
             return onUi(()->{for(DocumentSession s:sessions)if(s.uri!=null&&"file".equals(s.uri.getScheme())&&f.getPath().equals(s.uri.getPath()))return true;return false;});}
+        /** The open session of a library document (call on the UI thread). */
+        private DocumentSession sessionOf(File f){for(DocumentSession s:sessions)if(s.uri!=null&&"file".equals(s.uri.getScheme())&&f.getPath().equals(s.uri.getPath()))return s;return null;}
+        @Override public void beforeRead(String rel)throws Exception{
+            final File f=libraryFile(rel);if(f==null)return;
+            onUi(()->{DocumentSession s=sessionOf(f);if(s!=null&&s.store!=null)s.store.save();return null;});}
+        /** An open document cannot be rewritten under its renderer: its notes are saved, it is closed, and {@link #afterReplace} (or the end of the sync) opens it again. */
+        @Override public void beforeReplace(String rel)throws Exception{
+            final File f=libraryFile(rel);if(f==null)return;
+            onUi(()->{DocumentSession s=sessionOf(f);if(s==null)return null;
+                if(s.store!=null)s.store.save();
+                syncReopen.put(f.getPath(),new int[]{s==activeSession?currentPage:s.page,s==activeSession?1:0});closeDocument(s);return null;});}
+        @Override public void afterReplace(String rel)throws Exception{
+            final File f=libraryFile(rel);if(f==null)return;
+            onUi(()->{reopenAfterSync(f.getPath());return null;});}
         @Override public String exportNote(String rel)throws Exception{
             File f=libraryFile(rel);if(f==null||!f.isFile())return null;
             AnnotationStore st=new AnnotationStore(MainActivity.this);Uri uri=Uri.fromFile(f);st.open(uri);return st.exportJson(uri,f.getName());}
@@ -3318,6 +3355,13 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         @Override public String deviceId(){String id=recentPrefs.getString("sync_device_id",null);if(id==null){id=UUID.randomUUID().toString();recentPrefs.edit().putString("sync_device_id",id).apply();}return id;}
         @Override public String appVersion(){return BuildConfig.VERSION_NAME;}
     };
+    /** Documents that were open when the PC replaced them: library path -> {page, 1 when it was the shown one}. */
+    private final java.util.LinkedHashMap<String,int[]> syncReopen=new java.util.LinkedHashMap<>();
+    private void reopenAfterSync(String path){
+        int[] was=syncReopen.remove(path);if(was==null||isFinishing()||isDestroyed())return;
+        File f=new File(path);if(f.isFile())openPdf(Uri.fromFile(f),false,was[0],was[1]==1);
+    }
+    private void reopenAllAfterSync(){for(String path:new ArrayList<>(syncReopen.keySet()))reopenAfterSync(path);}
     private android.net.wifi.WifiManager.MulticastLock syncMulticast;
     private void showDeviceSync(){
         if(deviceSync!=null)return;
@@ -3327,9 +3371,9 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         try{android.net.wifi.WifiManager wifi=(android.net.wifi.WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);if(wifi!=null){syncMulticast=wifi.createMulticastLock("hdnotes-sync");syncMulticast.setReferenceCounted(false);syncMulticast.acquire();}}catch(RuntimeException ignored){syncMulticast=null;}
         StringBuilder where=new StringBuilder();if(addresses.isEmpty())where.append("(같은 네트워크에 연결되어 있지 않습니다)");else for(String a:addresses){if(where.length()>0)where.append("\n        ");where.append(a).append(":").append(sync.port());}
         new AlertDialog.Builder(this).setTitle("다른 기기와 동기화")
-            .setMessage("같은 네트워크(Wi-Fi · 핫스팟 · USB 테더링)에 연결된 PC 앱(Everynote for Windows)에서 ‘기기 동기화’를 여세요. PC가 이 휴대폰을 자동으로 찾으면 아래 코드만 입력하면 됩니다. 찾지 못하면 주소도 입력하세요.\n\n코드  "+sync.code()+"\n주소  "+where+"\n\n· PC는 양쪽에서 바뀐 문서를 비교해 최신 쪽으로 맞춥니다(문서마다 PDF·노트·이미지·녹음 통째).\n· 이 앱에서 열려 있는 문서는 덮어쓸 수 없으니 닫아 두세요.\n· 이 창을 닫으면 동기화가 끝납니다.")
+            .setMessage("같은 네트워크(Wi-Fi · 핫스팟 · USB 테더링)에 연결된 PC 앱(Everynote for Windows)에서 ‘기기 동기화’를 여세요. PC가 이 휴대폰을 자동으로 찾으면 아래 코드만 입력하면 됩니다. 찾지 못하면 주소도 입력하세요.\n\n코드  "+sync.code()+"\n주소  "+where+"\n\n· PC가 문서·폴더를 수정 시각으로 비교해 최신 쪽으로 맞춥니다(문서마다 PDF·노트·이미지·녹음 통째). 맞출 항목은 PC에서 고를 수 있습니다.\n· 이 앱에서 열려 있는 문서도 동기화됩니다(바뀔 때는 잠시 닫혔다가 다시 열립니다).\n· 이 창을 닫으면 동기화가 끝납니다.")
             .setPositiveButton("닫기",null)
-            .setOnDismissListener(d->{sync.stop();if(deviceSync==sync)deviceSync=null;if(syncMulticast!=null){try{syncMulticast.release();}catch(RuntimeException ignored){}syncMulticast=null;}getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}).show();
+            .setOnDismissListener(d->{sync.stop();if(deviceSync==sync)deviceSync=null;reopenAllAfterSync();if(libraryDialog!=null&&libraryDialog.isShowing())libraryDialog.reload();if(syncMulticast!=null){try{syncMulticast.release();}catch(RuntimeException ignored){}syncMulticast=null;}getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}).show();
     }
     private File recordingsDir(){File dir=new File(getFilesDir(),"recordings");dir.mkdirs();return dir;}
     private void startRecording(){
@@ -3574,7 +3618,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
          "실행 취소·다시 실행|필기 도구 줄의 되돌리기·다시 실행은 마지막 필기만이 아니라 글상자·도형·사진·표·메모·하이라이트의 추가, 이동, 수정, 삭제까지 문서 전체의 편집을 한 단계씩 되돌립니다. 페이지를 추가하거나 삭제하면 그 이전 기록은 지워집니다.",
          "개체 복사·붙여넣기|사진·도형·표·스티커·글상자를 누르면 나오는 메뉴(글상자는 ‘Aa’를 눌러 펼친 줄)에서 복사·잘라내기·복제를 고릅니다. 올가미로 여러 개를 한꺼번에 선택해 복사·잘라내기·삭제할 수도 있습니다. 붙여넣을 곳을 길게 누르면 나오는 메뉴의 ‘개체 붙여넣기’를 누르세요.",
          "테이프|형광펜 단추를 한 번 더 눌러 ‘종류’에서 테이프를 고르면 넓고 반투명한 마스킹 테이프를 칠할 수 있습니다. 굵기·투명도·색은 형광펜과 따로 기억하며, 지우개로 지울 수 있습니다.",
-         "백업·동기화|문서함 오른쪽 위 ⋮의 ‘이 폴더 백업’은 그 폴더(하위 폴더 포함)의 문서·필기·첨부를 ZIP 하나로 저장하고, ‘백업 복원’으로 다른 기기에서 원래 폴더 위치에 불러옵니다. ‘내보내기·백업 › 다른 기기와 동기화’는 같은 네트워크(Wi-Fi·핫스팟·USB 테더링)의 PC 앱과 문서를 통째로 주고받습니다.",
+         "백업·동기화|문서함 오른쪽 위 ⋮의 ‘이 폴더 일괄 백업’은 그 폴더(하위 폴더 포함)의 문서·필기·첨부를 ZIP 하나로 저장하고, ‘백업 불러오기’로 다른 기기에서 원래 폴더 위치에 불러옵니다. 문서함 ⋮ 또는 메뉴의 ‘다른 기기와 동기화’는 같은 네트워크(Wi-Fi·핫스팟·USB 테더링)의 PC 앱과 문서·폴더를 수정 시각으로 비교해 최신 쪽으로 맞춥니다(문서가 열려 있어도 되고, 맞출 항목은 PC에서 고를 수 있습니다).",
          "지우개|지우개 아이콘으로 필기와 하이라이트를 지웁니다. 지울 부분을 문지르거나 눌러서 한 획(하이라이트는 한 덩어리)씩 지워집니다. 실행 취소·다시 실행도 사용할 수 있습니다.",
          "올가미|영역을 그려 캡처하거나 글자를 복사합니다. 올가미 단추를 한 번 더 누르면 모양(자유·네모·원) 메뉴가 떠서 고를 수 있고, 영역을 그리면 복사·저장·공유 메뉴가 열립니다."},
         {"6. 형광펜과 하이라이트",
@@ -3630,7 +3674,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private void startLibraryRestore(){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT_BACKUP);}
     private void receiveBackupImport(int result,Intent data){
         if(result!=RESULT_OK||data==null||data.getData()==null)return;final Uri source=data.getData();
-        new AlertDialog.Builder(this).setTitle("백업 복원").setMessage("백업(전체 또는 폴더)의 문서·필기·사진·녹음·동영상을 원래 폴더 위치로 복원합니다. 다른 기기에서 만든 백업도 불러올 수 있습니다.\n\n• 추가 복원: 기존 문서는 그대로 두고, 같은 이름은 사본 (1)로 추가\n• 덮어쓰기: 같은 위치·이름의 문서를 백업 내용으로 교체 (열려 있는 문서는 건너뜀)")
+        new AlertDialog.Builder(this).setTitle("백업 불러오기").setMessage("백업(전체 또는 폴더)의 문서·필기·사진·녹음·동영상을 원래 폴더 위치로 복원합니다. 다른 기기에서 만든 백업도 불러올 수 있습니다.\n\n• 추가 복원: 기존 문서는 그대로 두고, 같은 이름은 사본 (1)로 추가\n• 덮어쓰기: 같은 위치·이름의 문서를 백업 내용으로 교체 (열려 있는 문서는 건너뜀)")
             .setPositiveButton("추가 복원",(d,w)->runRestore(source,false)).setNeutralButton("덮어쓰기",(d,w)->runRestore(source,true)).setNegativeButton("취소",null).show();
     }
     private boolean sessionHolds(File f){for(DocumentSession s:sessions)if(s.uri!=null&&"file".equals(s.uri.getScheme())&&f.getPath().equals(s.uri.getPath()))return true;return false;}

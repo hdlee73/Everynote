@@ -35,6 +35,8 @@ final class LibraryDialog extends Dialog {
         default void backupFolder(File folder){}
         /** Restore documents from a backup ZIP made by backupFolder / the whole-library backup. */
         default void restoreBackup(){}
+        /** Open the same-network sync with the Windows app (needs no open document). */
+        default void deviceSync(){}
     }
     private static final int ALL=0,FAVORITES=1,RECENT=2,FOLDER=3,TRASH=4;
     private static final String[] NAV_NAMES={"모든 노트","즐겨찾기","최근 문서","휴지통"};
@@ -370,7 +372,7 @@ final class LibraryDialog extends Dialog {
         AnchoredMenu.showCentered(activity,anchor,"문서 추가",AnchoredMenu.rows(
             new AnchoredMenu.Row("새 노트 만들기",R.drawable.ic_compose,()->actions.newNote(target,this::refresh)).tint(0xFF34C759),
             new AnchoredMenu.Row("파일 가져오기",R.drawable.ic_import,()->{dismiss();actions.importFiles(target);}).tint(0xFF387AFF),
-            new AnchoredMenu.Row("폴더째 가져오기",R.drawable.ic_import,()->{dismiss();actions.importFolder(target);}).tint(0xFF387AFF),
+            new AnchoredMenu.Row("폴더 일괄 불러오기",R.drawable.ic_import,()->{dismiss();actions.importFolder(target);}).tint(0xFF387AFF),
             new AnchoredMenu.Row("폴더 만들기",R.drawable.ic_folder_open,()->createFolder(target,()->{tree.reload();refresh();})).tint(0xFFF5A623)));
     }
     private void libraryMenu(View anchor){
@@ -378,12 +380,12 @@ final class LibraryDialog extends Dialog {
         if(mode==TRASH){menu.getMenu().add(0,10,order++,"비우기");menu.getMenu().add(0,11,order++,"모두 복원");}
         else{
             if(wide&&overflowed.contains("노트 작성"))menu.getMenu().add(0,14,order++,"노트 작성");
-            if(!wide||overflowed.contains("PDF 가져오기")){menu.getMenu().add(0,12,order++,"PDF 가져오기");menu.getMenu().add(0,15,order++,"폴더째 가져오기");}
+            if(!wide||overflowed.contains("PDF 가져오기")){menu.getMenu().add(0,12,order++,"PDF 가져오기");menu.getMenu().add(0,15,order++,"폴더 일괄 불러오기");}
             if(!wide||overflowed.contains("편집"))menu.getMenu().add(0,1,order++,"편집");
             if(!wide||overflowed.contains("보기 방식"))menu.getMenu().add(0,2,order++,"보기 방식");
             menu.getMenu().add(0,3,order++,"정렬 방식");menu.getMenu().add(0,4,order++,(repository.pinFavorites()?"✓  ":"")+"즐겨찾기 맨 위 고정");
             menu.getMenu().add(0,13,order++,"폴더 만들기");if(mode==FOLDER)menu.getMenu().add(0,5,order++,"폴더 색상");
-            menu.getMenu().add(0,8,order++,mode==FOLDER&&!folder.equals(repository.root)?"이 폴더 백업":"모든 문서 백업");menu.getMenu().add(0,9,order++,"백업 복원");
+            menu.getMenu().add(0,8,order++,mode==FOLDER&&!folder.equals(repository.root)?"이 폴더 일괄 백업":"모든 문서 백업");menu.getMenu().add(0,9,order++,"백업 불러오기");menu.getMenu().add(0,16,order++,"다른 기기와 동기화");
         }
         menu.getMenu().add(0,7,order++,"설정");
         menu.setOnMenuItemClickListener(item->{switch(item.getItemId()){
@@ -395,6 +397,7 @@ final class LibraryDialog extends Dialog {
             case 7:actions.settings();break;
             case 8:actions.backupFolder(mode==FOLDER?folder:repository.root);break;
             case 9:actions.restoreBackup();break;
+            case 16:actions.deviceSync();break;
             case 10:confirmEmptyTrash();break;
             case 11:restoreAll();break;
             case 12:dismiss();actions.importFiles(mode==FOLDER?folder:repository.root);break;
@@ -407,7 +410,12 @@ final class LibraryDialog extends Dialog {
     private void chooseSort(){new AlertDialog.Builder(activity).setTitle("정렬 방식").setSingleChoiceItems(LibraryRepository.SORT_NAMES,repository.sortMode(),(d,index)->{repository.sortMode(index);d.dismiss();refreshGrid();}).show();}
     /** Reloads the folder tree and the list (after documents were restored). */
     void reload(){if(tree!=null)tree.reload();refresh();}
-    private void folderMenu(File target,View anchor){PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add("폴더 색상");menu.getMenu().add("하위 폴더 만들기");menu.getMenu().add("이 폴더 백업");menu.setOnMenuItemClickListener(item->{if(item.getTitle().equals("폴더 색상"))chooseFolderColor(target);else if(item.getTitle().equals("이 폴더 백업"))actions.backupFolder(target);else createFolder(target,()->{tree.reload();refresh();});return true;});menu.show();}
+    /** Opens the shelf in selection mode (used by 다른 문서와 합치기): the folder of [preselected] is shown with that document ticked. */
+    void beginSelection(File preselected){
+        if(preselected!=null&&preselected.isFile()&&preselected.getParentFile()!=null)selectFolder(preselected.getParentFile());
+        selectionMode=true;selected.clear();if(preselected!=null&&preselected.isFile())selected.add(preselected);refreshGrid();
+    }
+    private void folderMenu(File target,View anchor){PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add("폴더 색상");menu.getMenu().add("하위 폴더 만들기");menu.getMenu().add("이 폴더 일괄 백업");menu.setOnMenuItemClickListener(item->{if(item.getTitle().equals("폴더 색상"))chooseFolderColor(target);else if(item.getTitle().equals("이 폴더 일괄 백업"))actions.backupFolder(target);else createFolder(target,()->{tree.reload();refresh();});return true;});menu.show();}
     private void chooseFolderColor(File target){int current=0;for(int i=0;i<LibraryRepository.FOLDER_COLORS.length;i++)if(LibraryRepository.FOLDER_COLORS[i]==repository.folderColor(target))current=i;
         new AlertDialog.Builder(activity).setTitle("폴더 색상 · "+(target.equals(repository.root)?"문서함":target.getName())).setSingleChoiceItems(LibraryRepository.FOLDER_COLOR_NAMES,current,(d,index)->{repository.folderColor(target,LibraryRepository.FOLDER_COLORS[index]);d.dismiss();tree.reload();refreshGrid();}).setNegativeButton("취소",null).show();}
     private void share(List<File> files){
