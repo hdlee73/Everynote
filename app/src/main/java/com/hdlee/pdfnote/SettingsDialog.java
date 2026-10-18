@@ -43,7 +43,7 @@ final class SettingsDialog extends Dialog {
         void requestTemplate(PaperChoiceView view);
     }
 
-    private static final int INK = 0xFF1C1C1E, MUTED = 0xFF8E8E93, ACCENT = 0xFF007AFF, BACKGROUND = 0xFFF6F6F8, LINE = 0xFFEFEFF2;
+    private static final int INK = 0xFF010102, MUTED = 0xFF848487, ACCENT = 0xFF387AFF, BACKGROUND = 0xFFF6F6F8, LINE = 0xFFEFEFF2;
     private final Activity activity;
     private final Host host;
     private final LinearLayout body;
