@@ -13,8 +13,10 @@ import java.util.regex.Pattern;
 
 /**
  * Tiny LAN server for device-to-device sync (no cloud, no automatic sync): while the "다른 기기와 동기화" card is open, the Windows app
- * on the same network (Wi-Fi, hotspot or USB tethering) can list the document library, download / upload whole documents (PDF + notes JSON) and the referenced images /
- * recordings. Documents are identified by their library-relative path. Every request needs the 6-digit code shown on the card.
+ * on the same network (Wi-Fi, hotspot or USB tethering) can list the document library and its folders, download / upload whole documents (PDF + notes JSON)
+ * and the referenced images / recordings, and create folders. Documents are identified by their library-relative path; the PC compares both libraries by
+ * modification time and sends each side's newer documents, so a document that is open here is saved (or closed and reopened) around the transfer.
+ * Every request needs the 6-digit code shown on the card.
  * The PC finds the phone by itself: it broadcasts {@link #PROBE} to UDP port {@link #DISCOVERY_PORT} (and to each link's gateway, which is the
  * phone on USB tethering / hotspot) and this server answers with its name and TCP port. The answer never carries the code.
  */
@@ -22,8 +24,18 @@ final class DeviceSync {
     interface Host {
         /** Library as JSON text: [{"path":"folder/name.pdf","size":bytes,"mtime":ms (PDF or notes, whichever is newer)}]. */
         String listLibrary() throws Exception;
-        /** True while the document is open in the app (it cannot be replaced then). */
-        boolean isOpen(String path) throws Exception;
+        /** True while the document is open in the app. */
+        default boolean isOpen(String path) throws Exception { return false; }
+        /** Relative paths of every folder in the library, empty ones too, as JSON: ["a","a/b"]. */
+        default String listFolders() throws Exception { return "[]"; }
+        /** Creates the library folder (and its parents); false when the path is not a valid library folder path. */
+        default boolean makeFolder(String path) throws Exception { return false; }
+        /** The PC is about to read the document: an open document writes its unsaved notes first. */
+        default void beforeRead(String path) throws Exception { }
+        /** The PC is about to replace the document: an open document is saved and closed here, then reopened by {@link #afterReplace}. */
+        default void beforeReplace(String path) throws Exception { }
+        /** The PC finished replacing the document (its notes were the last thing sent). */
+        default void afterReplace(String path) throws Exception { }
         /** The library file for a relative path (may not exist yet), or null when the path is not a valid library PDF path. */
         File libraryFile(String path);
         /** Notes of the library document as sidecar JSON, or null when there is no such document. */
@@ -179,6 +191,13 @@ final class DeviceSync {
         int q = path.indexOf('?'); String query = q >= 0 ? path.substring(q + 1) : null; if (q >= 0) path = path.substring(0, q);
         if (method.equals("GET") && path.equals("/v1/info")) { reply(out, 200, "application/json", bytes(announce())); return; }
         if (method.equals("GET") && path.equals("/v1/library")) { reply(out, 200, "application/json", bytes(host.listLibrary())); return; }
+        if (method.equals("GET") && path.equals("/v1/folders")) { reply(out, 200, "application/json", bytes(host.listFolders())); return; }
+        if (method.equals("PUT") && path.equals("/v1/folder")) {
+            String rel = null;
+            if (query != null) for (String kv : query.split("&")) if (kv.startsWith("p=")) rel = URLDecoder.decode(kv.substring(2), "UTF-8");
+            if (rel == null || !host.makeFolder(rel)) { reply(out, 400, "text/plain", bytes("bad path")); return; }
+            reply(out, 200, "text/plain", bytes("ok")); return;
+        }
         if (path.equals("/v1/pdf") || path.equals("/v1/note")) {
             String rel = null;
             if (query != null) for (String kv : query.split("&")) if (kv.startsWith("p=")) rel = URLDecoder.decode(kv.substring(2), "UTF-8");
@@ -187,6 +206,7 @@ final class DeviceSync {
             boolean pdf = path.equals("/v1/pdf");
             if (method.equals("GET")) {
                 if (!file.isFile()) { reply(out, 404, "text/plain", bytes("missing")); return; }
+                host.beforeRead(rel);
                 if (pdf) {
                     writeHead(out, 200, "application/pdf", file.length());
                     try (InputStream f = new FileInputStream(file)) { byte[] b = new byte[16384]; int n; while ((n = f.read(b)) > 0) out.write(b, 0, n); }
@@ -198,9 +218,9 @@ final class DeviceSync {
                 return;
             }
             if (method.equals("PUT")) {
-                if (host.isOpen(rel)) { reply(out, 409, "text/plain", bytes("document is open")); return; }
                 if (pdf) {
                     if (length > MAX_PDF) { reply(out, 413, "text/plain", bytes("too large")); return; }
+                    host.beforeReplace(rel);
                     File dir = file.getParentFile(); if (dir != null) dir.mkdirs();
                     File tmp = new File(dir, "." + file.getName() + ".part");
                     try (OutputStream f = new FileOutputStream(tmp)) {
@@ -213,6 +233,7 @@ final class DeviceSync {
                     if (length > MAX_JSON) { reply(out, 413, "text/plain", bytes("too large")); return; }
                     if (!file.isFile()) { reply(out, 404, "text/plain", bytes("send the PDF first")); return; }
                     host.importNote(rel, new String(readBody(in, (int) length), StandardCharsets.UTF_8));
+                    host.afterReplace(rel);
                     host.onActivity("받음");
                     reply(out, 200, "text/plain", bytes("ok"));
                 }
