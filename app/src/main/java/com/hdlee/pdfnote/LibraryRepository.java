@@ -56,7 +56,11 @@ final class LibraryRepository {
         List<File> items=new ArrayList<>();collectDocuments(root,items);String q=query.trim().toLowerCase(Locale.ROOT);items.removeIf(f->!f.getName().toLowerCase(Locale.ROOT).contains(q));items.sort(order());return items;
     }
     private void collectDocuments(File directory,List<File> into){for(File item:list(directory)){if(item.isDirectory())collectDocuments(item,into);else into.add(item);}}
-    private long modified(File file){return Math.max(file.lastModified(),AnnotationStore.modified(context,Uri.fromFile(file)));}
+    private long modified(File file){return modifiedTime(context,file);}
+    /** Newer of the PDF and its notes, in milliseconds. Some storage reports File.lastModified() in seconds, which showed
+     *  every note as "1970년 1월 22일"; a value too small to be milliseconds since 1973 is read as seconds. */
+    static long modifiedTime(android.content.Context context,File file){return Math.max(millis(file.lastModified()),millis(AnnotationStore.modified(context,Uri.fromFile(file))));}
+    static long millis(long time){return time>0&&time<100_000_000_000L?time*1000:time;}
     private File trashFolder(){File folder=new File(root,".trash");folder.mkdirs();return folder;}
     private boolean inTrash(File file){try{return file.getCanonicalPath().startsWith(new File(root,".trash").getCanonicalPath()+File.separator);}catch(IOException error){return true;}}
     static final class TrashItem {final File file;final String name,parent;final long deleted;TrashItem(File file,String name,String parent,long deleted){this.file=file;this.name=name;this.parent=parent;this.deleted=deleted;}}

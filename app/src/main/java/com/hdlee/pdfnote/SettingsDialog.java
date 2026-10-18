@@ -25,8 +25,6 @@ final class SettingsDialog extends Dialog {
         android.content.SharedPreferences prefs();
         boolean keepAwake();
         void setKeepAwake(boolean on);
-        boolean dockPinned();
-        void toggleDockPinned();
         boolean cropMargins();
         void setCropMargins(boolean on);
         boolean darkPage();
@@ -83,8 +81,7 @@ final class SettingsDialog extends Dialog {
         PaperChoiceView.Style style = PaperChoiceView.defaultStyle(prefs);
         section("일반",
             link("기본 노트 스타일", "새 노트를 만들 때 가장 처음 선택되어 있는 양식을 정합니다.", PaperChoiceView.describe(style), "set_note_style", this::chooseNoteStyle),
-            toggle("화면 켜 둠", "읽는 동안 화면이 꺼지지 않습니다.", host.keepAwake(), "set_keep_awake", on -> { host.setKeepAwake(on); toast(on ? "읽는 동안 화면이 꺼지지 않습니다" : "화면 자동 꺼짐을 따릅니다"); }),
-            toggle("전체 화면 메뉴 계속 표시", "전체 화면에서도 아래쪽 도구 줄을 항상 보여 줍니다.", host.dockPinned(), "set_dock_pinned", on -> host.toggleDockPinned()));
+            toggle("화면 켜 둠", "읽는 동안 화면이 꺼지지 않습니다.", host.keepAwake(), "set_keep_awake", on -> { host.setKeepAwake(on); toast(on ? "읽는 동안 화면이 꺼지지 않습니다" : "화면 자동 꺼짐을 따릅니다"); }));
         section("문서 보기",
             toggle("여백 자르기", "문서의 흰 여백을 잘라 화면에 꽉 채웁니다.", host.cropMargins(), "set_crop", on -> { host.setCropMargins(on); toast(on ? "문서 여백을 잘라 화면에 꽉 채웁니다" : "원래 여백을 그대로 보여줍니다"); }),
             toggle("검은 문서 배경", "문서 배경을 검게 표시합니다. 어두운 글씨 필기는 밝게 보입니다.", host.darkPage(), "set_dark_page", on -> host.toggleDarkPage()));
