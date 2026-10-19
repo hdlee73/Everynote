@@ -2848,9 +2848,9 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         inlineEdit=new EditText(this);inlineEdit.setTag("inline_text");inlineEdit.setText(e.text);inlineEdit.setSelection(inlineEdit.getText().length());inlineEdit.setHint("글을 입력하세요");inlineEdit.setHintTextColor(0x66000000|(e.color&0x00FFFFFF));
         inlineEdit.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);inlineEdit.setGravity(Gravity.TOP|Gravity.START);inlineEdit.setIncludeFontPadding(false);inlineEdit.setPadding(dp(3),dp(2),dp(3),dp(2));
         GradientDrawable frame=new GradientDrawable();frame.setColor(0x66FFFFFF);frame.setCornerRadius(dp(4));frame.setStroke(dp(1),ACCENT);inlineEdit.setBackground(frame);inlineEdit.setMinHeight(0);inlineEdit.setMinimumHeight(0);
-        inlineEdit.addTextChangedListener(new android.text.TextWatcher(){int newline=-1;boolean busy;public void beforeTextChanged(CharSequence q,int a,int b,int c){}public void onTextChanged(CharSequence q,int a,int b,int c){e.text=q.toString();if(b!=c)showInlineBar(false);newline=(!busy&&b==0&&c==1&&q.charAt(a)=='\n')?a:-1;}
+        inlineEdit.addTextChangedListener(new android.text.TextWatcher(){int newline=-1;boolean busy;public void beforeTextChanged(CharSequence q,int a,int b,int c){}public void onTextChanged(CharSequence q,int a,int b,int c){e.text=q.toString();newline=(!busy&&b==0&&c==1&&q.charAt(a)=='\n')?a:-1;}
             public void afterTextChanged(android.text.Editable q){if(newline<0||busy)return;int at=newline;newline=-1;busy=true;try{continueList(q,at);}finally{busy=false;}e.text=q.toString();}});
-        inlineEdit.setOnTouchListener((v,ev)->{if(ev.getActionMasked()==MotionEvent.ACTION_UP)showInlineBar(true);return false;});
+        inlineEdit.setOnTouchListener((v,ev)->{return false;});
         viewportLayer.addView(inlineEdit,new FrameLayout.LayoutParams(dp(120),-2,Gravity.TOP|Gravity.START));
         inlineMove=inlineHandle(R.drawable.ic_handle_move,"글상자 이동",(dx,dy,page)->{float w=e.right-e.left,h=e.bottom-e.top;float nx=Math.max(0f,Math.min(1f-w,e.left+dx/page.width())),ny=Math.max(0f,Math.min(1f-h,e.top+dy/page.height()));e.left=nx;e.right=nx+w;e.top=ny;e.bottom=ny+h;});
         inlineResize=inlineHandle(R.drawable.ic_handle_wide,"글상자 너비",(dx,dy,page)->{e.right=Math.max(e.left+.12f,Math.min(1f,e.right+dx/page.width()));});
@@ -2900,31 +2900,16 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         lp.width=lp.height=size;handle.setLayoutParams(lp);if(handle instanceof TextView)((TextView)handle).setTextSize(TypedValue.COMPLEX_UNIT_PX,size*.47f);
         if(handle.getBackground() instanceof GradientDrawable)((GradientDrawable)handle.getBackground()).setCornerRadius(size/2f);
     }
-    /** Keeps the toolbar clear of the text being typed: above the box first (the keyboard covers the lower part), else below, else at the top. */
-    /** The style bar never wider than the page area (a side panel makes that narrower); smaller widths scroll sideways. */
-    private int inlineBarWidth(){int area=viewportLayer!=null&&viewportLayer.getWidth()>0?viewportLayer.getWidth():getResources().getDisplayMetrics().widthPixels;return Math.max(dp(120),Math.min(dp(330),area-dp(16)));}
-    /** The format bar hides while typing so it stays out of the way; touching the text box (tap, long press, selection) brings it back. */
-    private void showInlineBar(boolean shown){if(inlineBar!=null&&(inlineBar.getVisibility()==View.VISIBLE)!=shown)inlineBar.setVisibility(shown?View.VISIBLE:View.GONE);}
+    /** The text style panel: a fixed-width column (narrower on a phone) docked at the page edge beside the tool rail. */
+    private int inlineBarWidth(){int area=viewportLayer!=null&&viewportLayer.getWidth()>0?viewportLayer.getWidth():getResources().getDisplayMetrics().widthPixels;return Math.max(dp(150),Math.min(dp(268),area*6/10));}
+    /** Keeps the panel on the side of the tool rail (the left edge when the rail is on the left, else the right edge), tall enough to scroll inside the page area. */
     private void placeInlineBar(int editLeft,int editRight,int editTop,int editBottom){
         if(inlineBar==null||viewportLayer==null||viewportLayer.getHeight()<=0)return;
-        int W=viewportLayer.getWidth(),H=viewportLayer.getHeight(),gap=dp(6),hs=inlineHandlePx>0?inlineHandlePx:dp(30);
-        int barH=inlineBar.getHeight()>0?inlineBar.getHeight():dp(42);
         FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)inlineBar.getLayoutParams();
-        // beside the text first (the right side, else the left), level with the top of the box; above / below only when neither side has room
-        int minSide=dp(200),want=Math.min(dp(330),inlineBarWidth()),right=W-editRight-gap-dp(4),left=editLeft-gap-dp(4);
-        int side=right>=minSide?1:left>=minSide?-1:0,sideW;
-        if(side!=0){
-            sideW=Math.min(want,side==1?right:left);int x=side==1?editRight+gap:editLeft-gap-sideW;
-            int y=Math.max(0,Math.min(editTop,Math.max(0,H-barH)));
-            if(lp.width!=sideW||lp.leftMargin!=x||lp.topMargin!=y||(lp.gravity&Gravity.HORIZONTAL_GRAVITY_MASK)!=Gravity.LEFT){lp.width=sideW;lp.gravity=Gravity.TOP|Gravity.LEFT;lp.leftMargin=x;lp.topMargin=y;lp.bottomMargin=0;inlineBar.setLayoutParams(lp);}
-            return;
-        }
-        int bw=inlineBarWidth(),above=hs+dp(6),below=hs*2/3,topMargin;
-        if(editTop-above-barH-gap>=dp(2))topMargin=editTop-above-barH-gap;
-        else if(H-editBottom-below>=barH+gap)topMargin=editBottom+below+gap;
-        else topMargin=dp(4);
-        topMargin=Math.max(0,Math.min(topMargin,Math.max(0,H-barH)));
-        if(lp.width!=bw||lp.topMargin!=topMargin||lp.leftMargin!=0||(lp.gravity&Gravity.HORIZONTAL_GRAVITY_MASK)!=Gravity.CENTER_HORIZONTAL){lp.width=bw;lp.gravity=Gravity.TOP|Gravity.CENTER_HORIZONTAL;lp.leftMargin=0;lp.topMargin=topMargin;lp.bottomMargin=0;inlineBar.setLayoutParams(lp);}
+        int H=viewportLayer.getHeight(),top=fullscreen||"float".equals(effectiveBarPlace())?dp(56):dp(8),gap=dp(8),gravity=Gravity.TOP|("left".equals(effectiveBarPlace())?Gravity.START:Gravity.END),width=inlineBarWidth();
+        int scrollMax=Math.max(dp(80),H-top-gap-dp(36+40+10));
+        if(inlineScrollMax!=scrollMax&&inlineScroll!=null){inlineScrollMax=scrollMax;inlineScroll.requestLayout();}
+        if(lp.width!=width||lp.topMargin!=top||lp.leftMargin!=gap||lp.rightMargin!=gap||lp.gravity!=gravity){lp.width=width;lp.topMargin=top;lp.leftMargin=gap;lp.rightMargin=gap;lp.gravity=gravity;inlineBar.setLayoutParams(lp);}
     }
     private void placeHandle(View handle,int left,int top){
         if(handle==null)return;FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)handle.getLayoutParams();
@@ -2964,48 +2949,74 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private void changeInlineSize(int delta){
         if(inlineElement==null)return;int points=Math.max(8,Math.min(72,pointsOf(inlineElement)+delta));inlineElement.textSize=points/(float)TEXT_PAGE_POINTS;applyInlineStyle();
     }
-    /** Slim one-row toolbar (Aa · B · I · size · delete · done); the font and colour rows open only when "Aa" is tapped. */
+    /** Samsung Notes style vertical panel for the text box, docked to the page edge next to the tool rail (header, font, B/I/U/S, size, colour, line spacing, alignment, lists, copy, delete / done). */
     private void buildInlineBar(AnnotationStore.PageElement e){
-        LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(6),dp(2),dp(6),dp(2));card.setTag("inline_style_bar");
-        final LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setVisibility(View.GONE);
-        panel.addView(formatRow(e),new LinearLayout.LayoutParams(-1,dp(38)));
-        LinearLayout clipRow=new LinearLayout(this);clipRow.setGravity(Gravity.CENTER_VERTICAL);clipRow.setTag("text_clip_row");
-        String[] clipNames={"글상자 복사","잘라내기","복제"};
-        for(int i=0;i<clipNames.length;i++){final int which=i;TextView chip=stepButton(clipNames[i],clipNames[i]);chip.setTextSize(13);chip.setTag("text_clip_"+i);chip.setOnClickListener(v->{commitInlineText();if(store==null||!store.elements.contains(e)){toast("내용이 비어 있어 복사할 수 없습니다");return;}if(which==2)duplicateElement(e);else copyElement(e,which==1);});LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(0,dp(32),1);cl.setMargins(dp(2),0,dp(2),0);clipRow.addView(chip,cl);}
-        panel.addView(clipRow,new LinearLayout.LayoutParams(-1,dp(38)));
+        final int panelW=inlineBarWidth();
+        final LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(8),dp(4),dp(8),dp(6));card.setTag("inline_style_bar");
+        final LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setTag("text_panel_body");
+        // header: title and a chevron that folds the panel away when it covers the text being typed
+        LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title=new TextView(this);title.setText("글자 서식");title.setTextSize(14);title.setTextColor(NAVY);title.setTypeface(Typeface.DEFAULT_BOLD);title.setPadding(dp(6),0,0,0);head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        final ImageButton fold=icon(R.drawable.ic_chevron_double_down,"서식 패널 접기",NAVY,null);fold.setTag("text_panel_toggle");fold.setPadding(dp(6),dp(6),dp(6),dp(6));
+        fold.setOnClickListener(v->{boolean open=body.getVisibility()!=View.VISIBLE;body.setVisibility(open?View.VISIBLE:View.GONE);fold.setRotation(open?0f:180f);fold.setContentDescription(open?"서식 패널 접기":"서식 패널 펼치기");});
+        head.addView(fold,new LinearLayout.LayoutParams(dp(32),dp(32)));card.addView(head,new LinearLayout.LayoutParams(-1,dp(36)));
+        // font
         final TextView faces=new TextView(this);faces.setTag("text_fonts");faces.setTextSize(14);faces.setTextColor(NAVY);faces.setGravity(Gravity.CENTER_VERTICAL);faces.setPadding(dp(12),0,dp(12),0);faces.setBackground(round(0xFFF2F2F4,18));faces.setContentDescription("글꼴 선택");
         Runnable showFont=()->{int at=Math.max(0,Arrays.asList(FONT_IDS).indexOf(e.font));faces.setText("글꼴  "+FONT_NAMES[at]+"  ▾");faces.setTypeface(AnnotationPainter.typeface(e.font,false,false));};showFont.run();inlineFontLabel=showFont;
         faces.setOnClickListener(v->{List<AnchoredMenu.Row> rows=new ArrayList<>();for(int i=0;i<FONT_IDS.length;i++){final String id=FONT_IDS[i];TextView sample=new TextView(this);sample.setText(FONT_NAMES[i]+"   가나다 ABC abc");sample.setTextSize(16);sample.setTextColor(id.equals(e.font)?ACCENT:NAVY);sample.setTypeface(AnnotationPainter.typeface(id,false,false));sample.setGravity(Gravity.CENTER_VERTICAL);sample.setPadding(dp(16),0,dp(16),0);sample.setMinHeight(dp(44));sample.setOnClickListener(x->{setInlineFont(id);if(fontPopup!=null)fontPopup.dismiss();});rows.add(AnchoredMenu.Row.custom(sample));}fontPopup=AnchoredMenu.show(this,faces,false,rows,null);});
-        panel.addView(faces,new LinearLayout.LayoutParams(-1,dp(40)));
-        LinearLayout palette=swatches(TEXT_COLORS,()->e.color|0xFF000000,c->{e.color=c|0xFF000000;applyInlineStyle();},26,1);palette.setTag("text_colors");palette.setPadding(0,dp(2),0,dp(2));panel.addView(palette,new LinearLayout.LayoutParams(-1,dp(34)));
-        LinearLayout spacing=new LinearLayout(this);spacing.setGravity(Gravity.CENTER_VERTICAL);spacing.setTag("text_line_row");
-        TextView spLabel=new TextView(this);spLabel.setText("줄간격");spLabel.setTextSize(13);spLabel.setTextColor(NAVY);spLabel.setPadding(dp(6),0,dp(6),0);spacing.addView(spLabel,new LinearLayout.LayoutParams(-2,dp(32)));
-        TextView lm=stepButton("−","줄간격 좁게");lm.setOnClickListener(v->changeInlineLine(-.05f));spacing.addView(lm,new LinearLayout.LayoutParams(dp(30),dp(32)));
-        inlineLineLabel=new TextView(this);inlineLineLabel.setTag("text_line");inlineLineLabel.setTextSize(12);inlineLineLabel.setTextColor(NAVY);inlineLineLabel.setGravity(Gravity.CENTER);inlineLineLabel.setTypeface(Typeface.DEFAULT_BOLD);spacing.addView(inlineLineLabel,new LinearLayout.LayoutParams(dp(40),dp(32)));updateInlineLineLabel();
-        TextView lp2=stepButton("＋","줄간격 넓게");lp2.setOnClickListener(v->changeInlineLine(.05f));spacing.addView(lp2,new LinearLayout.LayoutParams(dp(30),dp(32)));
-        TextView ruler=new TextView(this);ruler.setText("노트 줄에 맞추기");ruler.setTag("text_fit_ruler");ruler.setTextSize(13);ruler.setTextColor(ACCENT);ruler.setGravity(Gravity.CENTER);ruler.setTypeface(Typeface.DEFAULT_BOLD);ruler.setPadding(dp(10),0,dp(10),0);ruler.setBackground(round(0xFFE8F1FF,16));ruler.setContentDescription("노트 줄에 맞추기");ruler.setOnClickListener(v->chooseNoteRuler());
-        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-2,dp(32));rp.setMargins(dp(8),0,0,0);spacing.addView(ruler,rp);
-        panel.addView(spacing,new LinearLayout.LayoutParams(-1,dp(38)));
-        // buttons shrink with a narrow bar (split view, side panel) so the right-most ones (delete, done) are never cut off
-        final float fit=Math.max(.6f,Math.min(1f,(inlineBarWidth()-dp(14))/(float)dp(298)));final java.util.function.IntUnaryOperator u=x->Math.round(dp(x)*fit);
-        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+        body.addView(faces,panelRow(40,4));
+        // bold · italic · underline · strike
+        LinearLayout marks=new LinearLayout(this);marks.setGravity(Gravity.CENTER_VERTICAL);
         final boolean[] bold={e.bold},italic={e.italic};
-        TextView style=stepButton("Aa","글꼴·색 펼치기");style.setTextSize(14);style.setTypeface(Typeface.DEFAULT_BOLD);style.setTag("text_style_toggle");
-        style.setOnClickListener(v->{boolean open=panel.getVisibility()!=View.VISIBLE;panel.setVisibility(open?View.VISIBLE:View.GONE);style.setBackground(round(open?0xFFD6E6FF:0xFFF2F2F4,18));});
-        LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(u.applyAsInt(38),u.applyAsInt(32));sp.setMargins(u.applyAsInt(2),0,u.applyAsInt(6),0);row.addView(style,sp);
-        TextView boldChip=toggleChip("B",Typeface.BOLD,bold,()->{e.bold=bold[0];applyInlineStyle();});boldChip.setTag("text_bold");View italicChip=toggleIcon(R.drawable.ic_italic,italic,()->{e.italic=italic[0];applyInlineStyle();});italicChip.setTag("text_italic");
-        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(u.applyAsInt(34),u.applyAsInt(32));cp.setMargins(u.applyAsInt(2),0,u.applyAsInt(2),0);row.addView(boldChip,cp);LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(u.applyAsInt(34),u.applyAsInt(32));ip.setMargins(u.applyAsInt(2),0,u.applyAsInt(6),0);row.addView(italicChip,ip);
-        TextView minus=stepButton("−","글자 작게");minus.setOnClickListener(v->changeInlineSize(-1));row.addView(minus,new LinearLayout.LayoutParams(u.applyAsInt(30),u.applyAsInt(32)));
-        inlineSize=new TextView(this);inlineSize.setTag("text_size");inlineSize.setTextSize(12);inlineSize.setTextColor(NAVY);inlineSize.setGravity(Gravity.CENTER);inlineSize.setTypeface(Typeface.DEFAULT_BOLD);row.addView(inlineSize,new LinearLayout.LayoutParams(u.applyAsInt(40),u.applyAsInt(32)));
-        TextView plus=stepButton("＋","글자 크게");plus.setOnClickListener(v->changeInlineSize(1));row.addView(plus,new LinearLayout.LayoutParams(u.applyAsInt(30),u.applyAsInt(32)));
-        row.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
-        ImageButton remove=icon(R.drawable.ic_delete,"글상자 삭제",0xFFFF3B30,v->deleteInlineText());remove.setPadding(u.applyAsInt(7),u.applyAsInt(7),u.applyAsInt(7),u.applyAsInt(7));row.addView(remove,new LinearLayout.LayoutParams(u.applyAsInt(34),u.applyAsInt(34)));
-        ImageButton done=icon(R.drawable.ic_check,"입력 완료",Color.WHITE,v->commitInlineText());done.setTag("text_done");done.setBackground(round(ACCENT,17));done.setPadding(u.applyAsInt(7),u.applyAsInt(7),u.applyAsInt(7),u.applyAsInt(7));LinearLayout.LayoutParams dp2=new LinearLayout.LayoutParams(u.applyAsInt(34),u.applyAsInt(34));dp2.setMargins(u.applyAsInt(4),0,0,0);row.addView(done,dp2);
-        card.addView(row,new LinearLayout.LayoutParams(-1,dp(38)));card.addView(panel,new LinearLayout.LayoutParams(-1,-2));
-        HorizontalScrollView scroller=new HorizontalScrollView(this);scroller.setHorizontalScrollBarEnabled(false);scroller.setFillViewport(true);scroller.setOverScrollMode(View.OVER_SCROLL_NEVER);card.setMinimumWidth(Math.min(dp(300),inlineBarWidth()));scroller.addView(card,new FrameLayout.LayoutParams(-1,-2));
-        inlineBar=scroller;scroller.setBackground(round(0xF2FFFFFF,20));scroller.setElevation(dp(6));
-        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(inlineBarWidth(),-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);lp.setMargins(dp(8),0,dp(8),0);viewportLayer.addView(inlineBar,lp);
+        TextView boldChip=toggleChip("B",Typeface.BOLD,bold,()->{e.bold=bold[0];applyInlineStyle();});boldChip.setTag("text_bold");boldChip.setContentDescription("굵게");
+        View italicChip=toggleIcon(R.drawable.ic_italic,italic,()->{e.italic=italic[0];applyInlineStyle();});italicChip.setTag("text_italic");italicChip.setContentDescription("기울임");
+        View underline=formatIcon(3,"밑줄",()->e.underline,()->{e.underline=!e.underline;applyInlineStyle();});underline.setTag("text_underline");
+        View strike=formatIcon(4,"취소선",()->e.strike,()->{e.strike=!e.strike;applyInlineStyle();});strike.setTag("text_strike");
+        for(View v:new View[]{boldChip,italicChip,underline,strike}){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(34),1);lp.setMargins(dp(2),0,dp(2),0);marks.addView(v,lp);}
+        body.addView(marks,panelRow(38,2));
+        // size
+        LinearLayout sizeRow=new LinearLayout(this);sizeRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView sizeLabel=new TextView(this);sizeLabel.setText("글자 크기");sizeLabel.setTextSize(13);sizeLabel.setTextColor(NAVY);sizeLabel.setPadding(dp(6),0,dp(4),0);sizeRow.addView(sizeLabel,new LinearLayout.LayoutParams(0,dp(32),1));
+        TextView minus=stepButton("−","글자 작게");minus.setOnClickListener(v->changeInlineSize(-1));sizeRow.addView(minus,new LinearLayout.LayoutParams(dp(30),dp(32)));
+        inlineSize=new TextView(this);inlineSize.setTag("text_size");inlineSize.setTextSize(12);inlineSize.setTextColor(NAVY);inlineSize.setGravity(Gravity.CENTER);inlineSize.setTypeface(Typeface.DEFAULT_BOLD);sizeRow.addView(inlineSize,new LinearLayout.LayoutParams(dp(44),dp(32)));
+        TextView plus=stepButton("＋","글자 크게");plus.setOnClickListener(v->changeInlineSize(1));sizeRow.addView(plus,new LinearLayout.LayoutParams(dp(30),dp(32)));
+        body.addView(sizeRow,panelRow(38,2));
+        // colour
+        int swatch=Math.max(16,Math.min(22,Math.round((panelW-dp(32))/(float)TEXT_COLORS.length/getResources().getDisplayMetrics().density)-6));
+        LinearLayout palette=swatches(TEXT_COLORS,()->e.color|0xFF000000,c->{e.color=c|0xFF000000;applyInlineStyle();},swatch,1);palette.setTag("text_colors");palette.setPadding(0,dp(2),0,dp(2));body.addView(palette,panelRow(34,2));
+        // line spacing and fitting to the ruled paper
+        LinearLayout spacing=new LinearLayout(this);spacing.setGravity(Gravity.CENTER_VERTICAL);spacing.setTag("text_line_row");
+        TextView spLabel=new TextView(this);spLabel.setText("줄간격");spLabel.setTextSize(13);spLabel.setTextColor(NAVY);spLabel.setPadding(dp(6),0,dp(4),0);spacing.addView(spLabel,new LinearLayout.LayoutParams(0,dp(32),1));
+        TextView lm=stepButton("−","줄간격 좁게");lm.setOnClickListener(v->changeInlineLine(-.05f));spacing.addView(lm,new LinearLayout.LayoutParams(dp(30),dp(32)));
+        inlineLineLabel=new TextView(this);inlineLineLabel.setTag("text_line");inlineLineLabel.setTextSize(12);inlineLineLabel.setTextColor(NAVY);inlineLineLabel.setGravity(Gravity.CENTER);inlineLineLabel.setTypeface(Typeface.DEFAULT_BOLD);spacing.addView(inlineLineLabel,new LinearLayout.LayoutParams(dp(44),dp(32)));updateInlineLineLabel();
+        TextView lp2=stepButton("＋","줄간격 넓게");lp2.setOnClickListener(v->changeInlineLine(.05f));spacing.addView(lp2,new LinearLayout.LayoutParams(dp(30),dp(32)));
+        body.addView(spacing,panelRow(38,2));
+        TextView ruler=new TextView(this);ruler.setText("노트 줄에 맞추기");ruler.setTag("text_fit_ruler");ruler.setTextSize(13);ruler.setTextColor(ACCENT);ruler.setGravity(Gravity.CENTER);ruler.setTypeface(Typeface.DEFAULT_BOLD);ruler.setBackground(round(0xFFE8F1FF,16));ruler.setContentDescription("노트 줄에 맞추기");ruler.setOnClickListener(v->chooseNoteRuler());
+        body.addView(ruler,panelRow(32,4));
+        // alignment, then lists
+        body.addView(iconRow(new View[]{
+            tagged(formatIcon(0,"왼쪽 정렬",()->e.align==0,()->{e.align=0;applyInlineStyle();}),"text_align_left"),tagged(formatIcon(1,"가운데 정렬",()->e.align==1,()->{e.align=1;applyInlineStyle();}),"text_align_center"),tagged(formatIcon(2,"오른쪽 정렬",()->e.align==2,()->{e.align=2;applyInlineStyle();}),"text_align_right")}),panelRow(38,2));
+        body.addView(iconRow(new View[]{
+            tagged(formatIcon(5,"글머리 기호",()->inlineEdit!=null&&currentLineKind()==1,()->toggleListMarker(1)),"text_bullet"),tagged(formatIcon(6,"번호 매기기",()->inlineEdit!=null&&currentLineKind()==2,()->toggleListMarker(2)),"text_number"),tagged(formatIcon(7,"체크리스트",()->inlineEdit!=null&&currentLineKind()==3,()->toggleListMarker(3)),"text_check")}),panelRow(38,2));
+        LinearLayout clipRow=new LinearLayout(this);clipRow.setGravity(Gravity.CENTER_VERTICAL);clipRow.setTag("text_clip_row");
+        String[] clipNames={"복사","잘라내기","복제"};String[] clipHints={"글상자 복사","글상자 잘라내기","글상자 복제"};
+        for(int i=0;i<clipNames.length;i++){final int which=i;TextView chip=stepButton(clipNames[i],clipHints[i]);chip.setTextSize(13);chip.setTag("text_clip_"+i);chip.setOnClickListener(v->{commitInlineText();if(store==null||!store.elements.contains(e)){toast("내용이 비어 있어 복사할 수 없습니다");return;}if(which==2)duplicateElement(e);else copyElement(e,which==1);});LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(0,dp(32),1);cl.setMargins(dp(2),0,dp(2),0);clipRow.addView(chip,cl);}
+        body.addView(clipRow,panelRow(38,2));
+        ScrollView scroll=new ScrollView(this){@Override protected void onMeasure(int w,int h){super.onMeasure(w,inlineScrollMax>0?MeasureSpec.makeMeasureSpec(inlineScrollMax,MeasureSpec.AT_MOST):h);}};scroll.setVerticalScrollBarEnabled(false);scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);scroll.addView(body,new FrameLayout.LayoutParams(-1,-2));inlineScroll=scroll;
+        card.addView(scroll,new LinearLayout.LayoutParams(-1,-2));
+        // delete and done stay at the foot of the panel whatever its height
+        LinearLayout foot=new LinearLayout(this);foot.setGravity(Gravity.CENTER_VERTICAL);foot.setPadding(0,dp(4),0,0);
+        ImageButton remove=icon(R.drawable.ic_delete,"글상자 삭제",0xFFFF3B30,v->deleteInlineText());remove.setTag("text_delete");remove.setBackground(round(0xFFFFEDEC,17));remove.setPadding(dp(7),dp(7),dp(7),dp(7));LinearLayout.LayoutParams rm=new LinearLayout.LayoutParams(0,dp(34),1);rm.setMargins(dp(2),0,dp(4),0);foot.addView(remove,rm);
+        ImageButton done=icon(R.drawable.ic_check,"입력 완료",Color.WHITE,v->commitInlineText());done.setTag("text_done");done.setBackground(round(ACCENT,17));done.setPadding(dp(7),dp(7),dp(7),dp(7));LinearLayout.LayoutParams dn=new LinearLayout.LayoutParams(0,dp(34),1);dn.setMargins(dp(4),0,dp(2),0);foot.addView(done,dn);
+        card.addView(foot,new LinearLayout.LayoutParams(-1,dp(40)));
+        FrameLayout shell=new FrameLayout(this);shell.addView(card,new FrameLayout.LayoutParams(-1,-2));
+        inlineBar=shell;shell.setBackground(round(0xF8FFFFFF,20));shell.setElevation(dp(6));
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(panelW,-2,Gravity.TOP|Gravity.END);viewportLayer.addView(inlineBar,lp);
     }
+    private ScrollView inlineScroll;private int inlineScrollMax;
+    private LinearLayout.LayoutParams panelRow(int heightDp,int gapDp){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(heightDp));lp.setMargins(0,dp(gapDp),0,0);return lp;}
+    private View tagged(View v,String tag){v.setTag(tag);return v;}
+    private LinearLayout iconRow(View[] items){LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);for(View v:items){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(34),1);lp.setMargins(dp(2),0,dp(2),0);row.addView(v,lp);}return row;}
     private LinearLayout zoomPanel;private TextView zoomLabel;
     private void stepZoom(float factor){if(pageView==null||renderer==null)return;float next=Math.round((pageView.zoom()+(factor>1f?.05f:-.05f))*20f)/20f;pageView.setZoom(next);}
     private void updateZoomLabel(float scale){if(zoomLabel!=null)zoomLabel.setText(Math.round(scale*100f)+"%");}
@@ -3048,16 +3059,6 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         holder[0]=v;v.setContentDescription(description);v.setBackground(round(0xFFF2F2F4,16));v.setOnClickListener(x->{action.run();x.invalidate();if(x.getParent() instanceof ViewGroup){ViewGroup g=(ViewGroup)x.getParent();for(int i=0;i<g.getChildCount();i++)g.getChildAt(i).invalidate();}});
         return v;
     }
-    private LinearLayout formatRow(AnnotationStore.PageElement e){
-        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setTag("text_format");row.setPadding(0,dp(2),0,dp(2));
-        View[] items={
-            formatIcon(0,"왼쪽 정렬",()->e.align==0,()->{e.align=0;applyInlineStyle();}),formatIcon(1,"가운데 정렬",()->e.align==1,()->{e.align=1;applyInlineStyle();}),formatIcon(2,"오른쪽 정렬",()->e.align==2,()->{e.align=2;applyInlineStyle();}),
-            formatIcon(3,"밑줄",()->e.underline,()->{e.underline=!e.underline;applyInlineStyle();}),formatIcon(4,"취소선",()->e.strike,()->{e.strike=!e.strike;applyInlineStyle();}),
-            formatIcon(5,"글머리 기호",()->inlineEdit!=null&&currentLineKind()==1,()->toggleListMarker(1)),formatIcon(6,"번호 매기기",()->inlineEdit!=null&&currentLineKind()==2,()->toggleListMarker(2)),formatIcon(7,"체크리스트",()->inlineEdit!=null&&currentLineKind()==3,()->toggleListMarker(3))};
-        String[] tags={"text_align_left","text_align_center","text_align_right","text_underline","text_strike","text_bullet","text_number","text_check"};
-        for(int i=0;i<items.length;i++){items[i].setTag(tags[i]);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(34),1);lp.setMargins(dp(i==3||i==5?6:2),0,dp(2),0);row.addView(items[i],lp);}
-        return row;
-    }
     private int currentLineKind(){if(inlineEdit==null)return 0;String all=inlineEdit.getText().toString();int at=Math.max(0,inlineEdit.getSelectionStart());int start=at==0?0:all.lastIndexOf('\n',at-1)+1;int end=all.indexOf('\n',start);return markerKind(all.substring(start,end<0?all.length():end));}
     private TextView stepButton(String label,String description){TextView b=new TextView(this);b.setText(label);b.setTextSize(18);b.setTextColor(NAVY);b.setGravity(Gravity.CENTER);b.setContentDescription(description);b.setBackground(round(0xFFF2F2F4,18));return b;}
     private void removeInlineViews(){
@@ -3066,7 +3067,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         for(View v:new View[]{inlineEdit,inlineMove,inlineResize,inlineDelete,inlineBar})if(v!=null)viewportLayer.removeView(v);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         if(inlineEdit!=null){InputMethodManager keyboard=(InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);if(keyboard!=null)keyboard.hideSoftInputFromWindow(inlineEdit.getWindowToken(),0);}
-        inlineEdit=null;inlineMove=inlineResize=inlineDelete=null;inlineBar=null;inlineSize=null;inlineLineLabel=null;inlineElement=null;inlineStore=null;inlineView=null;
+        inlineEdit=null;inlineMove=inlineResize=inlineDelete=null;inlineBar=null;inlineScroll=null;inlineScrollMax=0;inlineSize=null;inlineLineLabel=null;inlineElement=null;inlineStore=null;inlineView=null;
     }
     /** Saves the text being typed (an empty new box is dropped; emptying an old box deletes it). */
     private void commitInlineText(){
