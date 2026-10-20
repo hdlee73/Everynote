@@ -136,6 +136,9 @@ Touching a word starts a fresh selection even near the previous selection handle
 - 문서 탭에 파일 아이콘, 얇은 테두리와 활성 표시. 긴 문서명은 앞부분부터 표시하고 끝부분만 생략. 선택한 탭이 보이도록 자동 이동.
 - 폴더에 둥근 탭·종이·음영을 적용한 색상 아이콘, 카드에 항목 수 표시. 폴더 트리와 목록에도 같은 디자인 적용.
 
+### v1.68.1 AI 번역 원문 지우기 개선
+- 덮는 영역을 글자 위·아래(받침·점)와 이어지는 글자 흔적을 따라 옆으로 넓히고, 표 선(가로·세로로 거의 끝까지 이어진 줄)은 남깁니다. 모든 단락을 먼저 지운 뒤 번역문을 씁니다.
+
 ### v1.68.0 AI 번역 틀 유지
 - AI 번역: 단락 단위로 번역해 원문 글자 자리(배경색 그대로)에 덮어 쓰고 새 PDF로 저장. 그림·표·배치 유지. `LayoutTranslator`, `AiAssistant.translateBlocks`, `SearchScanner.PageSource`.
 
