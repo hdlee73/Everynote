@@ -156,11 +156,16 @@ final class AiTools {
         builder.show();
     }
 
-    /** Writes [pages] as a new PDF beside the open document and returns it (call from a worker thread). */
-    private File makeDocument(String suffix, List<String> pages, List<String> labels) throws Exception {
+    /** A free file name beside the open document for a new PDF made from it. */
+    private File newTarget(String suffix) throws java.io.IOException {
         File self = host.uri() != null && "file".equals(host.uri().getScheme()) && host.uri().getPath() != null ? new File(host.uri().getPath()) : null;
         File folder = self != null && host.library().managed(self) ? self.getParentFile() : host.library().root;
-        File target = NotebookFiles.unique(folder, NotebookFiles.pdfName(stem(host.title()) + " (" + suffix + ")"));
+        return NotebookFiles.unique(folder, NotebookFiles.pdfName(stem(host.title()) + " (" + suffix + ")"));
+    }
+
+    /** Writes [pages] as a new PDF beside the open document and returns it (call from a worker thread). */
+    private File makeDocument(String suffix, List<String> pages, List<String> labels) throws Exception {
+        File target = newTarget(suffix);
         TextPdf.write(target, pages, labels);
         return target;
     }
@@ -255,21 +260,14 @@ final class AiTools {
         }));
     }
 
-    /** 번역: pick the language, then the pages; the translation becomes a new document shown beside the original. */
+    /** 번역: pick the language, then the pages; the translation is written over the original pages (pictures and layout stay) as a new document shown beside the original. */
     void translate() {
         new AlertDialog.Builder(activity).setTitle("번역할 언어").setItems(AiAssistant.LANGUAGES, (d, language) ->
             chooseScope("번역 범위", (first, last) -> run("문서 번역", (canceled, progress) -> {
-                List<String> texts = read(progress, canceled, first, last);
-                if (blank(texts)) { finish(progress, () -> toast("번역할 글자를 찾지 못했습니다")); return; }
-                List<String> out = new ArrayList<>();
-                for (int i = 0; i < texts.size(); i++) {
-                    say(progress, AiAssistant.LANGUAGES[language] + "(으)로 번역하는 중… " + (i + 1) + "/" + texts.size() + "쪽");
-                    String text = texts.get(i);
-                    out.add(text.trim().isEmpty() ? "" : AiAssistant.translate(text, AiAssistant.LANGUAGE_NAMES[language], canceled));
-                }
-                say(progress, "번역본을 새 문서로 만드는 중…");
-                File made = makeDocument("번역-" + AiAssistant.LANGUAGES[language], out, pageLabels(first, out.size()));
-                finish(progress, () -> { toast("번역본 ‘" + stem(made.getName()) + "’을 만들었습니다"); host.openBeside(made); });
+                File target = newTarget("번역-" + AiAssistant.LANGUAGES[language]);
+                LayoutTranslator.translate(activity, host.uri(), first, last, target, AiAssistant.LANGUAGE_NAMES[language], canceled,
+                    (done, total) -> say(progress, done >= total ? "번역본을 저장하는 중…" : AiAssistant.LANGUAGES[language] + "(으)로 번역하는 중… " + (done + 1) + "/" + total + "쪽"));
+                finish(progress, () -> { toast("번역본 ‘" + stem(target.getName()) + "’을 만들었습니다"); host.openBeside(target); });
             }))).show();
     }
 

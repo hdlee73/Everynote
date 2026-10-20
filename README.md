@@ -136,6 +136,9 @@ Touching a word starts a fresh selection even near the previous selection handle
 - 문서 탭에 파일 아이콘, 얇은 테두리와 활성 표시. 긴 문서명은 앞부분부터 표시하고 끝부분만 생략. 선택한 탭이 보이도록 자동 이동.
 - 폴더에 둥근 탭·종이·음영을 적용한 색상 아이콘, 카드에 항목 수 표시. 폴더 트리와 목록에도 같은 디자인 적용.
 
+### v1.68.0 AI 번역 틀 유지
+- AI 번역: 단락 단위로 번역해 원문 글자 자리(배경색 그대로)에 덮어 쓰고 새 PDF로 저장. 그림·표·배치 유지. `LayoutTranslator`, `AiAssistant.translateBlocks`, `SearchScanner.PageSource`.
+
 ### v1.67.0 검색 위치 표시 수정
 - 검색 결과로 이동할 때 배율을 바꾸지 않고(검색을 닫아도 유지), 회전된 페이지(/Rotate 90·270)에서 검색어 표시 위치가 어긋나던 좌표 계산을 고침.
 

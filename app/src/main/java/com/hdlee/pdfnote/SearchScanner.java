@@ -389,6 +389,29 @@ final class SearchScanner {
         return hash;
     }
 
+    /** The lines and a rendered image of single pages, for features that draw on the page (translation that keeps the layout). */
+    static final class PageSource implements AutoCloseable {
+        private final Engine engine;
+        private final Index index;
+        /** Pixels per PDF point of the image last returned by {@link #image}. */
+        float scale = 1f;
+
+        PageSource(Context context, Uri uri) { engine = new Engine(context, uri); index = index(context, uri); }
+
+        List<Line> lines(int page) throws Exception { return bodyLines(engine, index, page, false); }
+
+        Bitmap image(int page, float maxSide, float maxScale) throws IOException {
+            Bitmap image = engine.bitmap(page, true, maxSide, maxScale);
+            scale = engine.lastScale;
+            return image;
+        }
+
+        @Override public void close() {
+            engine.close();
+            save(index);
+        }
+    }
+
     /** Lazily opened resources for one scan. */
     private static final class Engine implements AutoCloseable {
         private final Context context;
@@ -399,6 +422,7 @@ final class SearchScanner {
         private ParcelFileDescriptor descriptor;
         private PdfRenderer renderer;
         private TextRecognizer recognizer;
+        float lastScale = 1f;
 
         Engine(Context context, Uri uri) { this.context = context.getApplicationContext(); this.uri = uri; }
 
@@ -433,10 +457,14 @@ final class SearchScanner {
         }
 
         /** Renders a page (white background) at OCR resolution; {@code pageImage=false} leaves it blank for ink-only OCR. */
-        Bitmap bitmap(int page, boolean pageImage) throws IOException {
+        Bitmap bitmap(int page, boolean pageImage) throws IOException { return bitmap(page, pageImage, 1600f, 2f); }
+
+        /** Same, with the longest side capped at [maxSide] pixels and the scale at [maxScale]; [lastScale] is the pixels per PDF point used. */
+        Bitmap bitmap(int page, boolean pageImage, float maxSide, float maxScale) throws IOException {
             openRenderer();
             try (PdfRenderer.Page p = renderer.openPage(page)) {
-                float scale = Math.min(2f, 1600f / Math.max(p.getWidth(), p.getHeight()));
+                float scale = Math.min(maxScale, maxSide / Math.max(p.getWidth(), p.getHeight()));
+                lastScale = scale;
                 Bitmap image = Bitmap.createBitmap(Math.max(1, Math.round(p.getWidth() * scale)), Math.max(1, Math.round(p.getHeight() * scale)), Bitmap.Config.ARGB_8888);
                 image.eraseColor(Color.WHITE);
                 if (pageImage) {
