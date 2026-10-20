@@ -23,7 +23,7 @@ public class LibraryFolderCoverTest {
 
     private void note(File file,String text)throws Exception{
         AnnotationStore store=new AnnotationStore(RuntimeEnvironment.getApplication());store.open(Uri.fromFile(file));
-        AnnotationStore.PageElement element=new AnnotationStore.PageElement();element.page=0;element.kind="text";element.text=text;element.right=.5f;element.bottom=.1f;store.elements.add(element);store.save();
+        AnnotationStore.PageElement element=new AnnotationStore.PageElement();element.text=text;store.elements.add(element);store.save();
     }
     private String noteOf(File file){AnnotationStore store=new AnnotationStore(RuntimeEnvironment.getApplication());store.open(Uri.fromFile(file));return store.elements.isEmpty()?null:store.elements.get(0).text;}
 
