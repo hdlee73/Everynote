@@ -3274,7 +3274,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     private int sidePanelWidth(){int saved=recentPrefs==null?0:recentPrefs.getInt("side_width_dp",0);if(saved>0)return clampSideWidth(dp(saved));return Math.min(dp(190),Math.round(getResources().getDisplayMetrics().widthPixels*.42f));}
     private int clampSideWidth(int width){return Math.max(dp(140),Math.min(width,Math.round(getResources().getDisplayMetrics().widthPixels*.7f)));}
     private View sideResizer;
-    private void closeSidePanel(){boolean searched=panelTab==0&&!searchHits.isEmpty();sidebarVisible=false;sidePanel.setVisibility(View.GONE);if(sideResizer!=null)sideResizer.setVisibility(View.GONE);closeSearch();hideKeyboard();applySearchHighlights();if(searched)for(PdfPageView v:new PdfPageView[]{pageView,firstPageView,secondPageView})if(v!=null&&v.zoom()!=1f)v.setZoom(1f);}
+    private void closeSidePanel(){sidebarVisible=false;sidePanel.setVisibility(View.GONE);if(sideResizer!=null)sideResizer.setVisibility(View.GONE);closeSearch();hideKeyboard();applySearchHighlights();}
     /** Icon-only floating menu for the preview panel: favorites only, all pages, add page, delete page. */
     private void showThumbnailMenu(View anchor){
         AnchoredMenu.show(this,anchor,false,AnchoredMenu.rows(
@@ -3606,7 +3606,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         applySearchHighlights();updateSearchStatus();
         for(int i=0;i<searchList.getChildCount();i++){View row=searchList.getChildAt(i);boolean on=i==index;row.setBackgroundColor(on?0xFFE5E5EA:Color.TRANSPARENT);}
         final View row=searchList.getChildAt(index);if(scrollToRow&&row!=null)row.post(()->searchScroll.smoothScrollTo(0,Math.max(0,row.getTop()-dp(8))));
-        final PdfPageView target=viewForPage(hit.page);if(target!=null)target.post(()->target.focusOnPoint(hit.x,hit.y));
+        final PdfPageView target=viewForPage(hit.page);if(target!=null)target.post(()->target.focusOnPoint(hit.x,hit.y,false));
     }
     private void stepSearch(int direction){
         if(searchHits.isEmpty()){if(searchInput.getText().toString().trim().length()>0&&!searching)startSearch();return;}
