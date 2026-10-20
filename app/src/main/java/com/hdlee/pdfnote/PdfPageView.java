@@ -397,9 +397,11 @@ final class PdfPageView extends View {
         float[] size = contentSize(); panX = fx - nx * size[0] - baseLeft(size); panY = fy - ny * size[1] - baseTop(size);
         clampPan(); invalidate(); listener.onZoomChanged(scale);
     }
-    void focusOnPoint(float x, float y) {
+    void focusOnPoint(float x, float y) { focusOnPoint(x, y, true); }
+    /** Centres a page point; {@code zoomIn=false} keeps the current zoom (search results), otherwise the view zooms in to at least 170%. */
+    void focusOnPoint(float x, float y, boolean zoomIn) {
         if (bitmap == null) return;
-        scale = Math.max(scale, 1.7f);
+        if (zoomIn) scale = Math.max(scale, 1.7f);
         if (spreadSide != 0) { RectF b = spreadBase(); panX = getWidth() / 2f + getLeft() - scale * (b.left + x * b.width()); panY = getHeight() / 2f + getTop() - scale * (b.top + y * b.height()); }
         else {
         float[] size = contentSize();

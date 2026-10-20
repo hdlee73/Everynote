@@ -312,6 +312,8 @@ final class SearchScanner {
         private final List<String> words = new ArrayList<>();
         private final List<float[]> boxes = new ArrayList<>();
         private float pageWidth = 1f, pageHeight = 1f, lineTop, lineBottom;
+        /** PDFBox reports the unrotated page size, but positions of a page with /Rotate 90 or 270 are already in the rotated (displayed) frame. */
+        private boolean swapped;
 
         LineCollector() throws IOException {
             super();
@@ -340,7 +342,7 @@ final class SearchScanner {
         private void flushLine() {
             if (words.isEmpty()) return;
             List<float[]> normalized = new ArrayList<>();
-            for (float[] box : boxes) normalized.add(new float[]{box[0] / pageWidth, box[1] / pageHeight, box[2] / pageWidth, box[3] / pageHeight});
+            for (float[] box : boxes) { float w = swapped ? pageHeight : pageWidth, h = swapped ? pageWidth : pageHeight; normalized.add(new float[]{box[0] / w, box[1] / h, box[2] / w, box[3] / h}); }
             lines.add(Line.fromWords(new ArrayList<>(words), normalized));
             words.clear();
             boxes.clear();
@@ -353,6 +355,8 @@ final class SearchScanner {
             lines.clear();
             words.clear();
             boxes.clear();
+            int rotation = ((document.getPage(page).getRotation() % 360) + 360) % 360;
+            swapped = rotation == 90 || rotation == 270;
             setStartPage(page + 1);
             setEndPage(page + 1);
             getText(document);
