@@ -108,13 +108,52 @@ final class Shapes {
             t.cells = new String[t.rows * t.cols];
             for (int i = 0; i < t.cells.length; i++) t.cells[i] = i + 1 < lines.length ? lines[i + 1] : "";
             t.bg = new int[t.cells.length];
-            int colorLine = t.cells.length + 1;
-            if (colorLine < lines.length && lines[colorLine].startsWith("~")) {
-                String[] parts = lines[colorLine].substring(1).split(",", -1);
-                for (int i = 0; i < t.bg.length && i < parts.length; i++) if (parts[i].matches("[0-9A-F]{8}")) t.bg[i] = parseColor(parts[i]);
+            for (int n = t.cells.length + 1; n < lines.length; n++) {
+                if (lines[n].startsWith("~")) {
+                    String[] parts = lines[n].substring(1).split(",", -1);
+                    for (int i = 0; i < t.bg.length && i < parts.length; i++) if (parts[i].matches("[0-9A-F]{8}")) t.bg[i] = parseColor(parts[i]);
+                } else if (lines[n].startsWith("@")) {
+                    String[] two = lines[n].substring(1).split(";", -1);
+                    if (two.length == 2) { t.colW = weights(two[0], t.cols); t.rowH = weights(two[1], t.rows); }
+                }
             }
             return t;
         }
+
+        /** Column widths and row heights as fractions of the table (each sums to 1); null = all equal. Dragged with the handles on the cell borders. */
+        float[] colW, rowH;
+        static final float MIN_CELL = .04f;
+
+        private static float[] weights(String text, int count) {
+            String[] parts = text.split(",", -1);
+            if (parts.length != count) return null;
+            float[] w = new float[count]; float sum = 0;
+            for (int i = 0; i < count; i++) { try { w[i] = Float.parseFloat(parts[i]); } catch (NumberFormatException e) { return null; } if (!(w[i] > 0f) || w[i] > 1000f) return null; sum += w[i]; }
+            for (int i = 0; i < count; i++) w[i] /= sum;
+            return w;
+        }
+
+        /** Column widths (fractions summing to 1). */
+        float[] colWidths() { if (colW != null && colW.length == cols) return colW; float[] w = new float[cols]; java.util.Arrays.fill(w, 1f / cols); return w; }
+        /** Row heights (fractions summing to 1). */
+        float[] rowHeights() { if (rowH != null && rowH.length == rows) return rowH; float[] h = new float[rows]; java.util.Arrays.fill(h, 1f / rows); return h; }
+
+        /** Moves the border after column/row [index] (0-based) by [delta] of the table, taking it from / giving it to the two neighbours. */
+        void dragBorder(boolean column, float[] start, int index, float delta) {
+            float[] w = start.clone();
+            float pair = w[index] + w[index + 1];
+            float a = Math.max(MIN_CELL, Math.min(pair - MIN_CELL, w[index] + delta));
+            w[index] = a; w[index + 1] = pair - a;
+            if (column) colW = w; else rowH = w;
+        }
+
+        private static String weightText(float[] w) {
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < w.length; i++) { if (i > 0) b.append(','); b.append(String.format(java.util.Locale.US, "%.4f", w[i])); }
+            return b.toString();
+        }
+
+        private static boolean equal(float[] w) { if (w == null) return true; for (float v : w) if (Math.abs(v - 1f / w.length) > .0005f) return false; return true; }
 
         static Table create(int rows, int cols, int line, int head, int fill) {
             Table t = new Table();
@@ -128,6 +167,7 @@ final class Shapes {
         /** Keeps existing cell text when the grid size changes. */
         Table resized(int newRows, int newCols) {
             Table t = create(newRows, newCols, line, head, fill);
+            if (newRows == rows && newCols == cols) { t.colW = colW; t.rowH = rowH; }
             for (int r = 0; r < Math.min(rows, newRows); r++) for (int c = 0; c < Math.min(cols, newCols); c++) { t.cells[r * newCols + c] = cells[r * cols + c]; t.bg[r * newCols + c] = bg[r * cols + c]; }
             return t;
         }
@@ -142,12 +182,18 @@ final class Shapes {
                 s.append("\n~");
                 for (int i = 0; i < bg.length; i++) { if (i > 0) s.append(','); if ((bg[i] >>> 24) != 0) s.append(hex(bg[i])); }
             }
+            if (!equal(colW) || !equal(rowH)) s.append("\n@").append(weightText(colWidths())).append(';').append(weightText(rowHeights()));
             return s.toString();
         }
     }
 
     static void drawTable(Canvas c, RectF b, String text, float pageWidth) {
         Table t = Table.parse(text);
+        float[] cwf = t.colWidths(), chf = t.rowHeights();
+        float[] xs = new float[t.cols + 1], ys = new float[t.rows + 1];
+        xs[0] = b.left; ys[0] = b.top;
+        for (int i = 0; i < t.cols; i++) xs[i + 1] = xs[i] + cwf[i] * b.width();
+        for (int i = 0; i < t.rows; i++) ys[i + 1] = ys[i] + chf[i] * b.height();
         float cw = b.width() / t.cols, ch = b.height() / t.rows;
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         float rad = Math.max(2f, Math.min(pageWidth * .02f, Math.min(ch * .5f, cw * .5f)));   // Samsung Notes: rounded outer corners
@@ -155,27 +201,28 @@ final class Shapes {
         android.graphics.Path outline = new android.graphics.Path(); outline.addRoundRect(b, rad, rad, android.graphics.Path.Direction.CW);
         c.clipPath(outline);
         if ((t.fill >>> 24) > 0) { paint.setColor(t.fill); c.drawRect(b, paint); }
-        if ((t.head >>> 24) > 0) { paint.setColor(t.head); c.drawRect(b.left, b.top, b.right, b.top + ch, paint); }
+        if ((t.head >>> 24) > 0) { paint.setColor(t.head); c.drawRect(b.left, b.top, b.right, ys[1], paint); }
         for (int r = 0; r < t.rows; r++) for (int col = 0; col < t.cols; col++) {
             int color = t.bg[r * t.cols + col];
             if ((color >>> 24) == 0) continue;
-            paint.setColor(color); c.drawRect(b.left + col * cw, b.top + r * ch, b.left + (col + 1) * cw, b.top + (r + 1) * ch, paint);
+            paint.setColor(color); c.drawRect(xs[col], ys[r], xs[col + 1], ys[r + 1], paint);
         }
         c.restoreToCount(save);
         float width = Math.max(1f, pageWidth * .0022f);
         paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(width); paint.setColor(AnnotationPainter.adj(t.line));
         c.drawRoundRect(b, rad, rad, paint);
-        for (int i = 1; i < t.rows; i++) c.drawLine(b.left, b.top + i * ch, b.right, b.top + i * ch, paint);
-        for (int j = 1; j < t.cols; j++) c.drawLine(b.left + j * cw, b.top, b.left + j * cw, b.bottom, paint);
+        for (int i = 1; i < t.rows; i++) c.drawLine(b.left, ys[i], b.right, ys[i], paint);
+        for (int j = 1; j < t.cols; j++) c.drawLine(xs[j], b.top, xs[j], b.bottom, paint);
         Paint tp = new Paint(Paint.ANTI_ALIAS_FLAG);
         tp.setColor(0xFF1C1C1E);
-        float size = Math.max(6f, Math.min(ch * .46f, pageWidth * .03f));
+        float minRow = ch; for (int i = 0; i < t.rows; i++) minRow = Math.min(minRow, ys[i + 1] - ys[i]);
+        float size = Math.max(6f, Math.min(minRow * .46f, pageWidth * .03f));
         tp.setTextSize(size);
         Paint.FontMetrics fm = tp.getFontMetrics();
         for (int r = 0; r < t.rows; r++) for (int col = 0; col < t.cols; col++) {
             String s = t.cells[r * t.cols + col];
             if (s == null || s.isEmpty()) continue;
-            float avail = cw - size * .6f;
+            float avail = xs[col + 1] - xs[col] - size * .6f;
             if (avail <= 0) continue;
             CharSequence shown = android.text.TextUtils.ellipsize(s, new android.text.TextPaint(tp), avail, android.text.TextUtils.TruncateAt.END);
             int cellBg = t.bg[r * t.cols + col];
@@ -183,7 +230,7 @@ final class Shapes {
             boolean dark = (cellBg >>> 24) > 0 && (0.299f * ((cellBg >> 16) & 255) + 0.587f * ((cellBg >> 8) & 255) + 0.114f * (cellBg & 255)) < 110f;
             tp.setColor(dark ? 0xFFFFFFFF : lit ? 0xFF1C1C1E : AnnotationPainter.adj(0xFF1C1C1E));
             tp.setFakeBoldText(r == 0 && (t.head >>> 24) > 0);
-            c.drawText(shown.toString(), b.left + col * cw + size * .3f, b.top + r * ch + ch / 2f - (fm.ascent + fm.descent) / 2f, tp);
+            c.drawText(shown.toString(), xs[col] + size * .3f, (ys[r] + ys[r + 1]) / 2f - (fm.ascent + fm.descent) / 2f, tp);
         }
     }
 }

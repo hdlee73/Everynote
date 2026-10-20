@@ -128,14 +128,45 @@ final class PdfPageView extends View {
         float[][] corners = {{b.left, b.top}, {b.right, b.top}, {b.left, b.bottom}, {b.right, b.bottom}};
         for (float[] c : corners) { p.setStyle(Paint.Style.FILL); p.setColor(Color.WHITE); canvas.drawCircle(c[0], c[1], 9f * density, p); p.setStyle(Paint.Style.STROKE); p.setColor(0xFF007AFF); canvas.drawCircle(c[0], c[1], 9f * density, p); }
         if (aspectLocked(selectedElement)) { float[][] mids = {{b.left, b.centerY()}, {b.right, b.centerY()}, {b.centerX(), b.top}, {b.centerX(), b.bottom}}; for (int i = 0; i < 4; i++) { float hw = (i < 2 ? 4f : 9f) * density, hh = (i < 2 ? 9f : 4f) * density; RectF r = new RectF(mids[i][0] - hw, mids[i][1] - hh, mids[i][0] + hw, mids[i][1] + hh); p.setStyle(Paint.Style.FILL); p.setColor(Color.WHITE); canvas.drawRoundRect(r, 4f * density, 4f * density, p); p.setStyle(Paint.Style.STROKE); p.setColor(0xFF007AFF); canvas.drawRoundRect(r, 4f * density, 4f * density, p); } }
+        if (selectedElement.kind.equals("table")) drawTableBorderHandles(canvas, b, density);
         canvas.restoreToCount(rotSave);
+    }
+    // ---- table cell sizes: drag the handle on a column / row border (hit codes 12 = column, 13 = row)
+    private Shapes.Table tableDrag; private float[] tableStart; private int tableBorder; private String tableText0;
+    /** Border positions inside a table box, left to right / top to bottom, for the current column widths and row heights. */
+    private static float[] borders(Shapes.Table t, RectF b, boolean column) {
+        float[] w = column ? t.colWidths() : t.rowHeights(); float[] out = new float[w.length - 1]; float at = column ? b.left : b.top, size = column ? b.width() : b.height();
+        for (int i = 0; i < out.length; i++) { at += w[i] * size; out[i] = at; }
+        return out;
+    }
+    /** 12 / 13 when (x, y) is within reach of an inner column / row border of the table box [b] (0 otherwise); sets {@link #tableBorder} to the border's index. */
+    private int tableBorderAt(AnnotationStore.PageElement el, RectF b, float x, float y, float reach) {
+        if (!el.kind.equals("table")) return 0;
+        Shapes.Table t = Shapes.Table.parse(el.text); int hit = 0; float best = reach;
+        if (y >= b.top - reach && y <= b.bottom + reach) { float[] xs = borders(t, b, true); for (int i = 0; i < xs.length; i++) if (Math.abs(x - xs[i]) < best) { best = Math.abs(x - xs[i]); hit = 12; tableBorder = i; } }
+        if (x >= b.left - reach && x <= b.right + reach) { float[] ys = borders(t, b, false); for (int i = 0; i < ys.length; i++) if (Math.abs(y - ys[i]) < best) { best = Math.abs(y - ys[i]); hit = 13; tableBorder = i; } }
+        return hit;
+    }
+    private void drawTableBorderHandles(Canvas canvas, RectF b, float density) {
+        Shapes.Table t = Shapes.Table.parse(selectedElement.text); Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float[] xs = borders(t, b, true), ys = borders(t, b, false);
+        for (int pass = 0; pass < 2; pass++) {
+            float[] at = pass == 0 ? xs : ys;
+            for (float v : at) {
+                float cx = pass == 0 ? v : b.right, cy = pass == 0 ? b.bottom : v;
+                float hw = (pass == 0 ? 11f : 4.5f) * density, hh = (pass == 0 ? 4.5f : 11f) * density;
+                RectF r = new RectF(cx - hw, cy - hh, cx + hw, cy + hh);
+                p.setStyle(Paint.Style.FILL); p.setColor(Color.WHITE); canvas.drawRoundRect(r, 4f * density, 4f * density, p);
+                p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.6f * density); p.setColor(0xFF007AFF); canvas.drawRoundRect(r, 4f * density, 4f * density, p);
+            }
+        }
     }
     private boolean handleElementGesture(MotionEvent e, RectF dest) {
         if (selectedElement == null || annotationStore == null || dest.width() <= 0) return false;
         if (selectedElement.page != page || !annotationStore.elements.contains(selectedElement)) { selectedElement = null; return false; }
         int action = e.getActionMasked(); float density = getResources().getDisplayMetrics().density;
         if (action == MotionEvent.ACTION_DOWN && e.getPointerCount() == 1 && !isStylus(e)) {
-            RectF b = AnnotationPainter.box(dest, selectedElement); float reach = 24f * density; int hit = 0;
+            RectF b = AnnotationPainter.box(dest, selectedElement); float reach = 24f * density; int hit = 0; tableText0 = null;
             float tx = e.getX(), ty = e.getY(); boolean turns = AnnotationPainter.rotates(selectedElement);
             if (turns && selectedElement.rot != 0f) { double a = Math.toRadians(-selectedElement.rot); float dx0 = tx - b.centerX(), dy0 = ty - b.centerY(); tx = b.centerX() + (float) (dx0 * Math.cos(a) - dy0 * Math.sin(a)); ty = b.centerY() + (float) (dx0 * Math.sin(a) + dy0 * Math.cos(a)); }
             if (Math.hypot(tx - (b.right + 14f * density), ty - (b.top - 28f * density)) <= 16f * density) hit = 7;
@@ -146,8 +177,10 @@ final class PdfPageView extends View {
             else if (aspectLocked(selectedElement) && Math.hypot(tx - b.right, ty - b.centerY()) <= 18f * density) hit = 9;
             else if (aspectLocked(selectedElement) && Math.hypot(tx - b.centerX(), ty - b.top) <= 18f * density) hit = 10;
             else if (aspectLocked(selectedElement) && Math.hypot(tx - b.centerX(), ty - b.bottom) <= 18f * density) hit = 11;
+            else if ((hit = tableBorderAt(selectedElement, b, tx, ty, 14f * density)) != 0) { }
             else if (b.contains(tx, ty)) hit = 1;
             if (hit == 0) { selectedElement = null; invalidate(); return false; }
+            if (hit == 12 || hit == 13) { tableDrag = Shapes.Table.parse(selectedElement.text); tableStart = (hit == 12 ? tableDrag.colWidths() : tableDrag.rowHeights()).clone(); tableText0 = selectedElement.text; }
             if (hit > 1 && hit < 6 && !resizable(selectedElement)) hit = 1;
             if (hit >= 8 && hit <= 11 && !resizable(selectedElement)) hit = 1;
             if (hit == 7) { elementDrag = 7; elementMoved = false; getParent().requestDisallowInterceptTouchEvent(true); return true; }
@@ -161,6 +194,14 @@ final class PdfPageView extends View {
             float dx = (e.getX() - elementStartX) / dest.width(), dy = (e.getY() - elementStartY) / dest.height();
             if (!elementMoved && Math.hypot(e.getX() - elementStartX, e.getY() - elementStartY) < 8f * density) return true;
             elementMoved = true; AnnotationStore.PageElement el = selectedElement; float w = elementOrigin.width(), h = elementOrigin.height();
+            if (elementDrag == 12 || elementDrag == 13) {
+                RectF tb = AnnotationPainter.box(dest, el); float px = e.getX(), py = e.getY();
+                if (el.rot != 0f) { double a = Math.toRadians(-el.rot); float ddx = px - tb.centerX(), ddy = py - tb.centerY(); px = tb.centerX() + (float) (ddx * Math.cos(a) - ddy * Math.sin(a)); py = tb.centerY() + (float) (ddx * Math.sin(a) + ddy * Math.cos(a)); }
+                float sx = elementStartX, sy = elementStartY;
+                if (el.rot != 0f) { double a = Math.toRadians(-el.rot); float ddx = sx - tb.centerX(), ddy = sy - tb.centerY(); sx = tb.centerX() + (float) (ddx * Math.cos(a) - ddy * Math.sin(a)); sy = tb.centerY() + (float) (ddx * Math.sin(a) + ddy * Math.cos(a)); }
+                boolean column = elementDrag == 12; float delta = column ? (px - sx) / tb.width() : (py - sy) / tb.height();
+                tableDrag.dragBorder(column, tableStart, tableBorder, delta); el.text = tableDrag.serialize(); invalidate(); return true;
+            }
             if (elementDrag == 6) {
                 float cx = dest.left + (elementOrigin.left + elementOrigin.right) / 2f * dest.width(), cy = dest.top + (elementOrigin.top + elementOrigin.bottom) / 2f * dest.height();
                 float deg = (float) Math.toDegrees(Math.atan2(e.getX() - cx, -(e.getY() - cy))); if (deg < 0f) deg += 360f;
@@ -196,9 +237,9 @@ final class PdfPageView extends View {
             invalidate(); return true;
         }
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            boolean moved = elementMoved; boolean deleting = elementDrag == 7; elementDrag = 0; elementMoved = false; getParent().requestDisallowInterceptTouchEvent(false);
+            boolean moved = elementMoved; boolean deleting = elementDrag == 7; boolean tableEdit = elementDrag == 12 || elementDrag == 13; elementDrag = 0; elementMoved = false; getParent().requestDisallowInterceptTouchEvent(false);
             if (deleting) { if (action == MotionEvent.ACTION_UP) { AnnotationStore.PageElement gone = selectedElement; selectedElement = null; listener.onElementDeleteRequested(gone); } invalidate(); return true; }
-            if (action == MotionEvent.ACTION_CANCEL) { selectedElement.rot = elementRot0; selectedElement.left = elementOrigin.left; selectedElement.top = elementOrigin.top; selectedElement.right = elementOrigin.right; selectedElement.bottom = elementOrigin.bottom; invalidate(); }
+            if (action == MotionEvent.ACTION_CANCEL) { if (tableEdit && tableText0 != null) selectedElement.text = tableText0; selectedElement.rot = elementRot0; selectedElement.left = elementOrigin.left; selectedElement.top = elementOrigin.top; selectedElement.right = elementOrigin.right; selectedElement.bottom = elementOrigin.bottom; invalidate(); }
             else if (moved) listener.onInkChanged(); else listener.onElementTapped(selectedElement);
             return true;
         }

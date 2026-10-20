@@ -626,6 +626,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
             AnchoredMenu.Row.divider(),
             new AnchoredMenu.Row("페이지 추가",R.drawable.ic_page_add,()->choosePageToInsert(currentPage)).tint(NAVY),
             new AnchoredMenu.Row("다른 형식으로 페이지 추가",R.drawable.ic_page_add,()->chooseOtherPageFormat(currentPage)).tint(NAVY),
+            new AnchoredMenu.Row("표지 만들기",R.drawable.ic_book,this::showCoverDialog).tint(NAVY),
             AnchoredMenu.Row.divider(),
             new AnchoredMenu.Row("현재 페이지 발췌하여 새 파일",R.drawable.ic_page_add,this::extractCurrentPages).tint(NAVY),
             new AnchoredMenu.Row("다른 문서와 합치기",R.drawable.ic_page_add,this::mergeWithOthers).tint(NAVY),
@@ -1680,6 +1681,43 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         ScrollView scroll=new ScrollView(this);scroll.addView(box);
         new AlertDialog.Builder(this).setTitle("다른 형식으로 추가 · p."+(afterIndex+1)+" 뒤").setView(scroll).setPositiveButton("추가",(d,w)->{try{insertPage(session,paper.paper(),afterIndex,sizes.getCheckedRadioButtonId()-100);}catch(IllegalArgumentException error){toast(error.getMessage());}}).setNegativeButton("취소",null).show();
     }
+    /** 표지 만들기 (Samsung Notes / Flexcil / GoodNotes style): a title, a template and a colour; the cover becomes page 1, or replaces the cover made earlier. */
+    private void showCoverDialog(){
+        if(activeSession==null||renderer==null){toast("문서를 먼저 여세요");return;}final DocumentSession session=activeSession;
+        if(!library.managed(session.uri)){toast("문서함에 저장한 뒤 표지를 만드세요");return;}
+        final int[] template={0},accent={0};
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(4),dp(20),dp(4));
+        final EditText title=new EditText(this),subtitle=new EditText(this),name=new EditText(this);
+        title.setHint("제목");title.setSingleLine();title.setText(documentTitle==null?"":documentTitle.replaceFirst("(?i)\\.pdf$",""));title.setSelection(title.getText().length());title.setTag("cover_title");
+        subtitle.setHint("부제목 (선택)");subtitle.setSingleLine();subtitle.setTag("cover_subtitle");
+        name.setHint("이름 (선택)");name.setSingleLine();name.setText(recentPrefs.getString("cover_name",""));name.setTag("cover_name");
+        final ImageView preview=new ImageView(this);preview.setTag("cover_preview");preview.setScaleType(ImageView.ScaleType.FIT_CENTER);{GradientDrawable frame=round(Color.WHITE,6);frame.setStroke(dp(1),0x22000000);preview.setBackground(frame);}
+        final Runnable draw=()->preview.setImageBitmap(CoverRenderer.render(new CoverRenderer.Spec(template[0],CoverRenderer.ACCENTS[accent[0]],title.getText().toString(),subtitle.getText().toString(),name.getText().toString()),300,424));
+        android.text.TextWatcher watcher=new android.text.TextWatcher(){public void beforeTextChanged(CharSequence q,int a,int b,int c){}public void onTextChanged(CharSequence q,int a,int b,int c){}public void afterTextChanged(android.text.Editable q){draw.run();}};
+        title.addTextChangedListener(watcher);subtitle.addTextChangedListener(watcher);name.addTextChangedListener(watcher);
+        final LinearLayout templates=new LinearLayout(this),colors=new LinearLayout(this);
+        final Runnable[] restyle={null};
+        for(int i=0;i<CoverRenderer.TEMPLATE_NAMES.length;i++){final int index=i;TextView chip=new TextView(this);chip.setText(CoverRenderer.TEMPLATE_NAMES[i]);chip.setTextSize(13);chip.setGravity(Gravity.CENTER);chip.setPadding(dp(12),0,dp(12),0);chip.setTag("cover_template:"+i);chip.setContentDescription("표지 모양 "+CoverRenderer.TEMPLATE_NAMES[i]);chip.setOnClickListener(v->{template[0]=index;restyle[0].run();});LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(34));lp.setMargins(0,0,dp(6),0);templates.addView(chip,lp);}
+        for(int i=0;i<CoverRenderer.ACCENTS.length;i++){final int index=i;View dot=new View(this);dot.setTag("cover_color:"+i);dot.setContentDescription("색 "+CoverRenderer.ACCENT_NAMES[i]);dot.setOnClickListener(v->{accent[0]=index;restyle[0].run();});LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(30),dp(30));lp.setMargins(0,0,dp(10),0);colors.addView(dot,lp);}
+        restyle[0]=()->{
+            for(int i=0;i<templates.getChildCount();i++){TextView chip=(TextView)templates.getChildAt(i);boolean on=i==template[0];chip.setTextColor(on?Color.WHITE:NAVY);chip.setBackground(round(on?ACCENT:0xFFF2F2F4,17));}
+            for(int i=0;i<colors.getChildCount();i++){GradientDrawable g=new GradientDrawable();g.setShape(GradientDrawable.OVAL);g.setColor(CoverRenderer.ACCENTS[i]);if(i==accent[0])g.setStroke(dp(3),0xFF1C1C1E);colors.getChildAt(i).setBackground(g);}
+            draw.run();
+        };
+        HorizontalScrollView templateScroll=new HorizontalScrollView(this);templateScroll.setHorizontalScrollBarEnabled(false);templateScroll.addView(templates);
+        LinearLayout.LayoutParams pv=new LinearLayout.LayoutParams(-1,dp(250));pv.setMargins(0,0,0,dp(10));box.addView(preview,pv);
+        box.addView(templateScroll,new LinearLayout.LayoutParams(-1,dp(40)));
+        LinearLayout.LayoutParams cl=new LinearLayout.LayoutParams(-1,dp(42));cl.setMargins(0,dp(4),0,0);colors.setGravity(Gravity.CENTER_VERTICAL);box.addView(colors,cl);
+        box.addView(title);box.addView(subtitle);box.addView(name);
+        TextView note=new TextView(this);note.setText("만들면 첫 장으로 들어갑니다. 이미 표지를 만들었다면 그 표지를 바꿉니다.");note.setTextSize(12);note.setTextColor(MUTED);note.setPadding(0,dp(8),0,0);box.addView(note);
+        ScrollView scroll=new ScrollView(this);scroll.addView(box);restyle[0].run();
+        new AlertDialog.Builder(this).setTitle("표지 만들기").setView(scroll).setPositiveButton("만들기",(d,w)->{
+            final CoverRenderer.Spec spec=new CoverRenderer.Spec(template[0],CoverRenderer.ACCENTS[accent[0]],title.getText().toString(),subtitle.getText().toString(),name.getText().toString());
+            recentPrefs.edit().putString("cover_name",spec.name).apply();
+            final boolean[] replaced={false};final File file=new File(session.uri.getPath());
+            modifyPages(session,"표지를 만드는 중…",()->library.setCover(file,spec,replaced),()->{if(!replaced[0])session.store.insertPageAfter(-1);},0,"표지 만들기 실패");
+        }).setNegativeButton("취소",null).show();
+    }
     private void insertPage(DocumentSession session,NotebookFiles.Paper paper,int afterIndex){insertPage(session,paper,afterIndex,0);}
     private void insertPage(DocumentSession session,NotebookFiles.Paper paper,int afterIndex,int sizeMode){
         final File file=new File(session.uri.getPath());
@@ -2224,7 +2262,31 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
             new AnchoredMenu.Row("동영상",R.drawable.ic_video,this::pickVideo).tint(0xFFDB332A),
             new AnchoredMenu.Row("유튜브 링크",R.drawable.ic_youtube,this::askYoutube).tint(NAVY));
     }
-    private List<AnchoredMenu.Row> insertRowsWithPaste(){List<AnchoredMenu.Row> rows=new ArrayList<>(insertRows());if(!elementClip.isEmpty())rows.add(0,pasteRow());return rows;}
+    private List<AnchoredMenu.Row> insertRowsWithPaste(){List<AnchoredMenu.Row> rows=new ArrayList<>(insertRows());if(clipboardText()!=null)rows.add(0,new AnchoredMenu.Row("글자 붙여넣기 (글상자)",R.drawable.ic_paste,this::pasteText).tint(NAVY));if(!elementClip.isEmpty())rows.add(0,pasteRow());return rows;}
+    /** Plain text on the clipboard (copied from a browser, a message, another app), or null when there is none. Pictures and links to files do not count. */
+    private String clipboardText(){
+        try{ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);ClipData data=clipboard==null?null:clipboard.getPrimaryClip();if(data==null||data.getItemCount()==0)return null;
+            ClipData.Item item=data.getItemAt(0);if(item.getUri()!=null&&item.getText()==null&&item.getHtmlText()==null)return null;
+            CharSequence text=item.getText()!=null?item.getText():item.coerceToText(this);if(text==null)return null;
+            String value=text.toString().replace("\r\n","\n").replace('\r','\n');return value.trim().isEmpty()?null:value;
+        }catch(RuntimeException error){return null;}
+    }
+    /** Puts the copied text on the page as a text box (where the page was long-pressed, else near the top of the shown page); the box opens for editing. */
+    private void pasteText(){
+        if(renderer==null||store==null){toast("문서를 먼저 여세요");return;}
+        String text=clipboardText();if(text==null){toast("붙여넣을 글자가 없습니다. 다른 앱에서 글자를 복사한 뒤 다시 시도하세요");return;}
+        if(text.length()>20000)text=text.substring(0,20000);
+        float[] at=freshDrop();int page=at!=null?(int)at[0]:currentPage;float x=at!=null?at[1]:.1f,y=at!=null?at[2]:.12f;
+        stopInk();highlightMode=outlineMode=false;pageView.setHighlightMode(false,selectedColor);pageView.setOutlineMode(false);placementKind="";memoMode=false;pageView.setMemoMode(false);updateToolStates();commitInlineText();
+        AnnotationStore.PageElement box=newTextBox(page,x,y);box.right=Math.min(.97f,box.left+.6f);box.text=text;fitTextElement(box);beginInlineText(box,true);
+        toast("붙여넣었습니다 · 글상자의 위치와 크기, 글자 서식을 바꿀 수 있습니다");
+    }
+    /** 붙여넣기 chip of the text box panel: inserts the copied text at the cursor (or over the selection). */
+    private void pasteIntoInline(){
+        String text=clipboardText();if(text==null){toast("붙여넣을 글자가 없습니다");return;}if(inlineEdit==null)return;
+        int from=Math.max(0,Math.min(inlineEdit.getSelectionStart(),inlineEdit.getSelectionEnd())),to=Math.max(0,Math.max(inlineEdit.getSelectionStart(),inlineEdit.getSelectionEnd()));
+        inlineEdit.getText().replace(from,to,text);inlineEdit.requestFocus();
+    }
     private void showInsertMenu(View anchor){
         if(renderer==null){toast("문서를 먼저 여세요");return;}
         dropTarget=null;
@@ -2484,7 +2546,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         }catch(Exception error){runOnUiThread(()->{dropTarget=null;toast("이미지를 가져오지 못했습니다: "+error.getMessage());});}},"drop-download").start();
     }
     @Override public boolean onKeyDown(int keyCode,android.view.KeyEvent event){
-        if(keyCode==android.view.KeyEvent.KEYCODE_V&&event.isCtrlPressed()&&renderer!=null&&!(getCurrentFocus() instanceof EditText)){pasteImage();return true;}
+        if(keyCode==android.view.KeyEvent.KEYCODE_V&&event.isCtrlPressed()&&renderer!=null&&!(getCurrentFocus() instanceof EditText)){ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);ClipData cd=cm==null?null:cm.getPrimaryClip();boolean image=cd!=null&&cd.getItemCount()>0&&cd.getItemAt(0).getUri()!=null&&cd.getDescription()!=null&&cd.getDescription().hasMimeType("image/*");if(!image&&clipboardText()!=null&&youtubeId(clipboardText().trim())==null)pasteText();else pasteImage();return true;}
         return super.onKeyDown(keyCode,event);
     }
     // ---- hyperlinks
@@ -2985,6 +3047,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         TextView title=new TextView(this);title.setText("글자 서식");title.setTextSize(14);title.setTextColor(NAVY);title.setTypeface(Typeface.DEFAULT_BOLD);title.setPadding(dp(6),0,0,0);head.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         final ImageButton fold=icon(R.drawable.ic_chevron_double_down,"서식 패널 접기",NAVY,null);fold.setTag("text_panel_toggle");fold.setPadding(dp(6),dp(6),dp(6),dp(6));
         fold.setOnClickListener(v->{boolean open=body.getVisibility()!=View.VISIBLE;body.setVisibility(open?View.VISIBLE:View.GONE);fold.setRotation(open?0f:180f);fold.setContentDescription(open?"서식 패널 접기":"서식 패널 펼치기");});
+        final TextView pasteChip=new TextView(this);pasteChip.setText("붙여넣기");pasteChip.setTextSize(12);pasteChip.setTextColor(ACCENT);pasteChip.setGravity(Gravity.CENTER);pasteChip.setPadding(dp(8),0,dp(8),0);pasteChip.setTag("text_paste");pasteChip.setContentDescription("복사한 글자 붙여넣기");pasteChip.setOnClickListener(v->pasteIntoInline());head.addView(pasteChip,new LinearLayout.LayoutParams(-2,dp(32)));
         head.addView(fold,new LinearLayout.LayoutParams(dp(32),dp(32)));card.addView(head,new LinearLayout.LayoutParams(-1,dp(36)));
         // font
         final TextView faces=new TextView(this);faces.setTag("text_fonts");faces.setTextSize(14);faces.setTextColor(NAVY);faces.setGravity(Gravity.CENTER_VERTICAL);faces.setPadding(dp(12),0,dp(12),0);faces.setBackground(round(0xFFF2F2F4,18));faces.setContentDescription("글꼴 선택");
@@ -3619,7 +3682,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         {"1. 기본 원리",
          "문서 위에 겹쳐 쓰기|필기·하이라이트·메모·도형·사진 같은 모든 기록은 PDF 위에 얹는 별도 ‘주석 층’으로 앱 안에 저장됩니다. 원본 PDF 파일은 바뀌지 않으며, 내보내기를 하면 기록이 합쳐진 새 PDF가 만들어집니다.",
          "자동 저장|기록은 바로 저장되고, 앱을 다시 열면 열어 둔 탭과 마지막 페이지가 복원됩니다.",
-         "문서함|상단 왼쪽 폴더 버튼에서 PDF·노트·Office 문서를 폴더별로 관리합니다. 새 문서는 폴더 버튼 또는 탭 줄의 + 버튼으로 추가합니다. 문서를 길게 누르면 선택 모드가 되어 위쪽 줄에서 이동·공유·삭제·전체 선택을 하고 ⋮에서 이름 변경·복사본 만들기·즐겨찾기를 합니다. 설정은 문서함의 설정 항목(더보기 메뉴 포함)에서 엽니다.",
+         "문서함|상단 왼쪽 폴더 버튼에서 PDF·노트·Office 문서를 폴더별로 관리합니다. 새 문서는 폴더 버튼 또는 탭 줄의 + 버튼으로 추가합니다. 문서를 길게 누르면 선택 모드가 되어 위쪽 줄에서 이동·공유·삭제·전체 선택을 하고 ⋮에서 이름 변경·복사본 만들기·즐겨찾기를 합니다. 설정은 문서함의 설정 항목(더보기 메뉴 포함)에서 엽니다. 폴더도 길게 누르면 이름 바꾸기·잘라내기(이동)·복사·삭제를 할 수 있고, 선택 모드에서는 문서와 폴더를 함께 고를 수 있습니다.",
          "여러 문서|상단 탭으로 문서를 전환하고 × 로 닫습니다. 기록은 문서마다 따로 저장됩니다."},
         {"2. 화면 구성",
          "상단 줄|문서함, 문서 이름, 페이지 미리보기, 검색, 전체 화면, 더보기(⋮) 메뉴가 있습니다.",
@@ -3643,7 +3706,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
          "굵기·색·투명도|색은 기본 팔레트 또는 무지개 칩으로 직접 고르고, 투명도 막대로 농도를 정합니다. 하이라이트와 도형·메모 색도 같은 방식입니다.",
          "직선|펜 메뉴의 ‘직선’을 켜면 시작점과 끝점을 잇는 반듯한 선을 긋습니다.",
          "실행 취소·다시 실행|필기 도구 줄의 되돌리기·다시 실행은 마지막 필기만이 아니라 글상자·도형·사진·표·메모·하이라이트의 추가, 이동, 수정, 삭제까지 문서 전체의 편집을 한 단계씩 되돌립니다. 페이지를 추가하거나 삭제하면 그 이전 기록은 지워집니다.",
-         "개체 복사·붙여넣기|사진·도형·표·스티커·글상자를 누르면 나오는 메뉴(글상자는 ‘Aa’를 눌러 펼친 줄)에서 복사·잘라내기·복제를 고릅니다. 올가미로 여러 개를 한꺼번에 선택해 복사·잘라내기·삭제할 수도 있습니다. 붙여넣을 곳을 길게 누르면 나오는 메뉴의 ‘개체 붙여넣기’를 누르세요.",
+         "개체 복사·붙여넣기|사진·도형·표·스티커·글상자를 누르면 나오는 메뉴(글상자는 ‘Aa’를 눌러 펼친 줄)에서 복사·잘라내기·복제를 고릅니다. 올가미로 여러 개를 한꺼번에 선택해 복사·잘라내기·삭제할 수도 있습니다. 붙여넣을 곳을 길게 누르면 나오는 메뉴의 ‘개체 붙여넣기’를 누르세요. 다른 앱에서 복사한 글자는 삽입 메뉴(빈 곳 길게 누르기)의 ‘글자 붙여넣기’로 글상자가 됩니다. 표는 선택하면 나타나는 열·행 경계 손잡이를 끌어 칸 크기를 바꿉니다.",
          "테이프|형광펜 단추를 한 번 더 눌러 ‘종류’에서 테이프를 고르면 넓고 반투명한 마스킹 테이프를 칠할 수 있습니다. 굵기·투명도·색은 형광펜과 따로 기억하며, 지우개로 지울 수 있습니다.",
          "백업·동기화|문서함 오른쪽 위 ⋮의 ‘이 폴더 일괄 백업’은 그 폴더(하위 폴더 포함)의 문서·필기·첨부를 ZIP 하나로 저장하고, ‘백업 불러오기’로 다른 기기에서 원래 폴더 위치에 불러옵니다. 문서함 ⋮ 또는 메뉴의 ‘다른 기기와 동기화’는 같은 네트워크(Wi-Fi·핫스팟·USB 테더링)의 PC 앱과 문서·폴더를 수정 시각으로 비교해 최신 쪽으로 맞춥니다(문서가 열려 있어도 되고, 맞출 항목은 PC에서 고를 수 있습니다).",
          "지우개|지우개 아이콘으로 필기와 하이라이트를 지웁니다. 지울 부분을 문지르거나 눌러서 한 획(하이라이트는 한 덩어리)씩 지워집니다. 실행 취소·다시 실행도 사용할 수 있습니다.",
@@ -3673,7 +3736,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
          "새 노트|문서함에서 새 노트를 만들면 종이 서식을 고릅니다. 맨 위에 금감원노트·금감원노트_칸나누기·리갈노트 서식이 있고 기본값은 금감원노트입니다. 백지 · 줄노트(보통·좁게·넓게) · 모눈종이 · 리걸노트 · 점 격자 · 코넬 노트 · 오선지가 있고, 종이 색도 고를 수 있습니다. 종이는 미리보기 칸에서 바로 고르고, 생성되는 노트는 세로 또는 가로로 만들 수 있습니다. 설정 > 기본 노트 스타일에서 정해 둔 종이·색·방향이 새 노트를 만들 때 가장 먼저 선택되어 있습니다.",
          "내 서식|‘내 PDF·이미지 서식’을 고르면 가지고 있는 PDF의 첫 페이지나 이미지를 모든 페이지의 배경으로 씁니다.",
          "페이지 추가|‘페이지 추가’는 바로 앞 페이지와 같은 크기·방향·서식(백지, 금감원노트 등)의 새 페이지를 붙입니다. 노트의 마지막 장에서 다음으로 넘겨도 같은 페이지가 붙습니다. ‘다른 형식으로 페이지 추가’에서는 다른 종이와 A4 세로·가로 크기를 고를 수 있습니다."},
-        {"12. 음성 녹음 · 검색 · 번역",
+        {"12. 음성 녹음 · 검색 · 번역 페이지 관리의 ‘표지 만들기’는 제목·부제목·이름과 모양·색을 골라 첫 장에 표지를 넣고, 다시 만들면 바꿉니다.",
          "음성 녹음|개요 패널의 마이크 탭에서 녹음하면 현재 페이지에 ‘▶ 녹음’ 표시가 붙고, 탭하면 재생합니다.",
          "검색|돋보기 아이콘으로 본문 글자를 찾고, 손글씨 필기도 검색됩니다.",
          "번역·읽어주기|글자를 선택한 뒤 팝업에서 번역을 누르면 기기 안에서 바로 번역해(처음 한 번만 번역 모델을 내려받습니다) 원문과 번역을 보여 주는 창이 열립니다. 창에서 번역을 고치거나 복사할 수 있고, '포스트잇 붙이기'를 누르면 그 자리에 포스트잇으로 붙습니다. 메모·번역 포스트잇은 한 번 탭하면 도형처럼 테두리가 나타나 모서리 핸들로 크기, 위쪽 ↻로 회전, ×로 삭제, 몸통을 끌어 이동할 수 있습니다(한 번 더 탭하면 내용 편집). 읽어주기는 선택한 글자를 소리 내어 읽습니다."},
