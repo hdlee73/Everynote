@@ -271,10 +271,11 @@ final class AiAssistant {
     }
 
     /** Translation of separate paragraphs, one result per paragraph (the model is asked to keep the [n] markers; a paragraph it drops is translated alone). */
+    private static final java.util.regex.Pattern MARKER = java.util.regex.Pattern.compile("[\\[【]\\s*(\\d{1,3})\\s*[\\]】]");
+
     static List<String> translateBlocks(List<String> blocks, String languageName, AtomicBoolean canceled) throws Exception {
         List<String> out = new ArrayList<>();
         for (int i = 0; i < blocks.size(); i++) out.add(null);
-        java.util.regex.Pattern marker = java.util.regex.Pattern.compile("^\\s*\\[(\\d+)\\]\\s*(.*)$");
         int i = 0;
         while (i < blocks.size()) {
             int start = i;
@@ -285,24 +286,41 @@ final class AiAssistant {
             }
             String reply = ask("Translate each numbered paragraph between <<< and >>> into " + languageName
                 + ". Keep every [n] marker in front of its own translation, one paragraph per marker. Output only the numbered translations, with no comments.", material.toString().trim(), 1500, canceled);
-            int current = -1;
-            for (String line : reply.split("\n")) {
-                java.util.regex.Matcher m = marker.matcher(line);
-                if (m.matches()) {
-                    int n;
-                    try { n = Integer.parseInt(m.group(1)); } catch (NumberFormatException e) { n = -1; }
-                    current = n >= 1 && start + n - 1 < i ? start + n - 1 : -1;
-                    if (current >= 0) out.set(current, m.group(2).trim());
-                } else if (current >= 0 && !line.trim().isEmpty()) {
-                    out.set(current, out.get(current) + " " + line.trim());
-                }
-            }
+            String[] parsed = parseNumbered(reply, i - start);
+            for (int k = 0; k < parsed.length; k++) out.set(start + k, parsed[k]);
         }
         for (int k = 0; k < blocks.size(); k++) {
-            String done = out.get(k);
-            if (done == null || done.isEmpty()) out.set(k, blocks.get(k).trim().isEmpty() ? "" : translate(blocks.get(k), languageName, canceled));
+            String done = out.get(k) == null ? "" : clean(out.get(k), blocks.get(k));
+            if (done.isEmpty() && !blocks.get(k).trim().isEmpty()) done = clean(translate(blocks.get(k), languageName, canceled), blocks.get(k));
+            out.set(k, done);
         }
         return out;
+    }
+
+    /** Splits a numbered reply into {@code count} entries; numbers are used for matching only and never kept. */
+    static String[] parseNumbered(String reply, int count) {
+        String[] out = new String[count];
+        java.util.regex.Matcher m = MARKER.matcher(reply);
+        int prevEnd = -1, prevN = -1;
+        while (true) {
+            boolean found = m.find();
+            if (prevN >= 1 && prevN <= count) {
+                String part = reply.substring(prevEnd, found ? m.start() : reply.length());
+                String text = clean(part, "");
+                if (!text.isEmpty() && (out[prevN - 1] == null || out[prevN - 1].isEmpty())) out[prevN - 1] = text;
+            }
+            if (!found) break;
+            try { prevN = Integer.parseInt(m.group(1)); } catch (NumberFormatException e) { prevN = -1; }
+            prevEnd = m.end();
+        }
+        return out;
+    }
+
+    /** One line of plain translated text: no [n] markers unless the source paragraph itself had them. */
+    static String clean(String text, String source) {
+        String t = text == null ? "" : text;
+        if (!MARKER.matcher(source).find()) t = MARKER.matcher(t).replaceAll(" ");
+        return t.replaceAll("\\s+", " ").trim();
     }
 
     private static String join(List<String> parts, String separator) {
