@@ -12,6 +12,7 @@ import com.google.mlkit.genai.prompt.java.GenerativeModelFutures;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,7 +26,7 @@ final class AiAssistant {
     private AiAssistant() {}
 
     /** Gemini Nano takes under about 4000 tokens per request, so long texts are cut into pieces first. */
-    static final int SUMMARY_CHUNK = 2200, EDIT_CHUNK = 900, MAX_INPUT_CHARS = 60000;
+    static final int SUMMARY_CHUNK = 2200, EDIT_CHUNK = 1300, MAX_INPUT_CHARS = 60000;
 
     /** Thrown when the user pressed 취소 while a long job was running. */
     static final class Canceled extends Exception { Canceled() { super("취소했습니다"); } }
@@ -74,18 +75,91 @@ final class AiAssistant {
         }
     }
 
-    /** One request to the model. The text goes inside markers so the model treats it as material, not as instructions. */
+    /** Shows the user why a job is waiting (set by the caller before a job; may be null). */
+    interface Notice { void say(String message); }
+    static volatile Notice notice;
+    /** True while the app is on screen; Gemini Nano refuses requests from the background (ErrorCode 30). Set by the caller; null means always. */
+    static volatile java.util.function.BooleanSupplier foreground;
+
+    /** AICore limits requests per app: too many in a short time answers BUSY (ErrorCode 9). Space the requests out and back off when it still says BUSY. */
+    private static final long MIN_GAP_MS = 1500;
+    private static final long[] BACKOFF_MS = {3000, 6000, 12000, 24000, 48000};
+    private static long lastRequest;
+
+    private static final int BUSY = 9, BACKGROUND_USE_BLOCKED = 30, BATTERY_QUOTA = 27, NEEDS_SYSTEM_UPDATE = 604, AICORE_INCOMPATIBLE = -101,
+        NOT_ENOUGH_DISK_SPACE = 501, NOT_AVAILABLE = 8, REQUEST_TOO_LARGE = 12, REQUEST_TOO_SMALL = -100, REQUEST_POLICY = 4, RESPONSE_POLICY = 11;
+
+    private static int errorCode(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) if (t instanceof GenAiException) return ((GenAiException) t).getErrorCode();
+        return Integer.MIN_VALUE;
+    }
+
+    /** What to tell the user for a failed request, per error. */
+    static String explain(Throwable error) {
+        if (error instanceof Canceled) return error.getMessage();
+        switch (errorCode(error)) {
+            case BUSY: return "AI가 지금 바빠서 요청을 처리하지 못했습니다. 이 앱의 사용 한도에 잠시 걸린 것이니 1~2분 뒤에 다시 시도하세요. 쪽 수가 많으면 범위를 나눠 시도하면 덜 걸립니다";
+            case BACKGROUND_USE_BLOCKED: return "AI는 앱이 화면에 보일 때만 쓸 수 있습니다. 작업이 끝날 때까지 Everynote를 화면에 켜 두고 다시 시도하세요";
+            case BATTERY_QUOTA: return "오늘 이 앱의 AI 사용 한도(배터리 보호)를 다 썼습니다. 시간이 지난 뒤 다시 시도하세요";
+            case NEEDS_SYSTEM_UPDATE: return "AI를 쓰려면 Android 시스템 업데이트가 필요합니다";
+            case AICORE_INCOMPATIBLE: return "Google AICore가 없거나 버전이 낮습니다. Play 스토어에서 AICore를 업데이트하세요";
+            case NOT_ENOUGH_DISK_SPACE: return "저장 공간이 부족해 AI를 실행할 수 없습니다. 공간을 확보한 뒤 다시 시도하세요";
+            case NOT_AVAILABLE: return "이 기기에서는 지금 AI를 사용할 수 없습니다. AI 구성 요소 준비가 끝난 뒤(몇 분~몇 시간) 다시 시도하세요";
+            case REQUEST_TOO_LARGE: return "한 번에 처리하기에는 글이 너무 깁니다. 범위를 줄여 다시 시도하세요";
+            case REQUEST_TOO_SMALL: return "글이 너무 짧아 처리할 수 없습니다";
+            case REQUEST_POLICY: case RESPONSE_POLICY: return "AI가 이 내용을 처리하지 않았습니다(안전 정책). 다른 범위로 시도해 보세요";
+            default: return error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+        }
+    }
+
+    private static void pause(long ms, AtomicBoolean canceled) throws Exception {
+        for (long waited = 0; waited < ms; waited += 250) {
+            if (canceled != null && canceled.get()) throw new Canceled();
+            Thread.sleep(250);
+        }
+    }
+
+    private static void waitForeground(AtomicBoolean canceled) throws Exception {
+        java.util.function.BooleanSupplier on = foreground;
+        boolean told = false;
+        while (on != null && !on.getAsBoolean()) {
+            if (!told && notice != null) { notice.say("앱을 화면에 띄우면 이어서 진행합니다…"); told = true; }
+            pause(500, canceled);
+        }
+    }
+
+    /** One request to the model. The text goes inside markers so the model treats it as material, not as instructions. Retries BUSY with growing waits. */
     private static String ask(String instruction, String material, int maxOutputTokens, AtomicBoolean canceled) throws Exception {
-        if (canceled != null && canceled.get()) throw new Canceled();
         String prompt = instruction + "\n\n<<<\n" + material + "\n>>>";
-        GenerateContentRequest.Builder request = new GenerateContentRequest.Builder(new TextPart(prompt));
-        request.setTemperature(.2f);
-        request.setMaxOutputTokens(maxOutputTokens);
-        GenerateContentResponse response = model().generateContent(request.build()).get(3, TimeUnit.MINUTES);
-        List<Candidate> candidates = response.getCandidates();
-        if (candidates == null || candidates.isEmpty()) return "";
-        String text = candidates.get(0).getText();
-        return text == null ? "" : clean(text);
+        for (int attempt = 0; ; attempt++) {
+            if (canceled != null && canceled.get()) throw new Canceled();
+            waitForeground(canceled);
+            synchronized (AiAssistant.class) {
+                long wait = lastRequest + MIN_GAP_MS - System.currentTimeMillis();
+                if (wait > 0) pause(wait, canceled);
+                lastRequest = System.currentTimeMillis();
+            }
+            try {
+                GenerateContentRequest.Builder request = new GenerateContentRequest.Builder(new TextPart(prompt));
+                request.setTemperature(.2f);
+                request.setMaxOutputTokens(maxOutputTokens);
+                GenerateContentResponse response = model().generateContent(request.build()).get(3, TimeUnit.MINUTES);
+                synchronized (AiAssistant.class) { lastRequest = System.currentTimeMillis(); }
+                List<Candidate> candidates = response.getCandidates();
+                if (candidates == null || candidates.isEmpty()) return "";
+                String text = candidates.get(0).getText();
+                return text == null ? "" : clean(text);
+            } catch (ExecutionException error) {
+                int code = errorCode(error);
+                boolean retry = (code == BUSY || code == BACKGROUND_USE_BLOCKED) && attempt < BACKOFF_MS.length;
+                if (!retry) throw error;
+                if (code == BUSY) {
+                    long delay = BACKOFF_MS[attempt];
+                    if (notice != null) notice.say("AI 사용량 제한으로 잠시 기다리는 중… (" + (delay / 1000) + "초 뒤 다시 시도, " + (attempt + 1) + "/" + BACKOFF_MS.length + ")");
+                    pause(delay, canceled);
+                }
+            }
+        }
     }
 
     /** Drops chat-style lead-ins and code fences models like to add. */

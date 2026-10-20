@@ -65,18 +65,44 @@ final class AiTools {
         progress.setCancelable(false);
         progress.setButton(ProgressDialog.BUTTON_NEGATIVE, "취소", (d, w) -> canceled.set(true));
         progress.show();
+        activity.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        final boolean[] resumed = {true};
+        final android.app.Application.ActivityLifecycleCallbacks lifecycle = new android.app.Application.ActivityLifecycleCallbacks() {
+            @Override public void onActivityResumed(Activity a) { if (a == activity) resumed[0] = true; }
+            @Override public void onActivityPaused(Activity a) { if (a == activity) resumed[0] = false; }
+            @Override public void onActivityCreated(Activity a, android.os.Bundle b) { }
+            @Override public void onActivityStarted(Activity a) { }
+            @Override public void onActivityStopped(Activity a) { }
+            @Override public void onActivitySaveInstanceState(Activity a, android.os.Bundle b) { }
+            @Override public void onActivityDestroyed(Activity a) { }
+        };
+        activity.getApplication().registerActivityLifecycleCallbacks(lifecycle);
+        AiAssistant.foreground = () -> resumed[0];
+        AiAssistant.notice = message -> say(progress, message);
+        final Runnable cleanup = () -> {
+            AiAssistant.foreground = null;
+            AiAssistant.notice = null;
+            activity.getApplication().unregisterActivityLifecycleCallbacks(lifecycle);
+            activity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        };
         new Thread(() -> {
             String problem = AiAssistant.prepare((kb, unused) -> activity.runOnUiThread(() -> progress.setMessage("AI 모델을 내려받는 중… " + (kb / 1024) + " MB")));
-            if (problem != null) { finish(progress, () -> toast(problem)); return; }
+            if (problem != null) { finish(progress, () -> { cleanup.run(); toast(problem); }); return; }
             try {
                 job.run(canceled, progress);
-            } catch (AiAssistant.Canceled c) {
-                finish(progress, () -> toast("취소했습니다"));
             } catch (Throwable error) {
-                final String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
-                finish(progress, () -> toast("AI 작업을 마치지 못했습니다: " + message));
+                final String message = AiAssistant.explain(error);
+                final boolean cancel = error instanceof AiAssistant.Canceled;
+                finish(progress, () -> { cleanup.run(); if (cancel) toast("취소했습니다"); else showFailure(message); });
+                return;
             }
+            activity.runOnUiThread(cleanup);
         }, "ai-job").start();
+    }
+
+    /** A failed AI job gets a dialog (a toast is gone before it can be read). */
+    private void showFailure(String message) {
+        new AlertDialog.Builder(activity).setTitle("AI 작업을 마치지 못했습니다").setMessage(message).setPositiveButton("확인", null).show();
     }
 
     private void finish(ProgressDialog progress, Runnable then) {
