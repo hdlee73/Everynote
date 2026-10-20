@@ -95,17 +95,109 @@ final class LayoutTranslator {
 
     private static int luma(int color) { return (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114) / 1000; }
 
-    /** Covers [block] and writes [translated] over it, shrinking the letters until the text fits. */
-    private static void draw(Canvas canvas, Bitmap image, Block block, String translated) {
+    /** What to wipe for one paragraph: the paragraph's box, grown to take in the ink of the original letters, minus ruling lines. */
+    private static final class Cover {
+        int left, top, right, bottom, background;
+        boolean[] keepRow, keepCol;
+    }
+
+    private static boolean ink(int color, int backgroundLuma) { return Math.abs(luma(color) - backgroundLuma) > 48; }
+
+    private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    /**
+     * Works out the area to wipe. The text layer only gives the height of the letters above the baseline and the width of the words,
+     * so the box is grown downward (descenders), upward (accents, dots) and sideways along any ink that continues the line,
+     * but never over a ruling line (a row or column that is ink almost all the way across) or into the next block of text.
+     */
+    private static Cover plan(Bitmap image, Block block, List<Block> all) {
+        int w = image.getWidth(), h = image.getHeight();
+        float lh = block.lineHeight;
+        int coreLeft = clamp(Math.round(block.left), 0, w), coreRight = clamp(Math.round(block.right), 0, w);
+        int coreTop = clamp(Math.round(block.top), 0, h), coreBottom = clamp(Math.round(block.bottom), 0, h);
+        int top = clamp(Math.round(block.top - 0.3f * lh), 0, h), bottom = clamp(Math.round(block.bottom + 0.5f * lh), 0, h);
+        int left0 = clamp(Math.round(block.left - 0.3f * lh), 0, w), right0 = clamp(Math.round(block.right + 0.3f * lh), 0, w);
+        if (bottom - top < 2 || right0 - left0 < 2) return null;
+        int background = surround(image, block.left, block.top, block.right, block.bottom);
+        int bgLuma = luma(background);
+        // text beside this paragraph (another column on the same rows) limits how far the wipe may reach
+        int leftLimit = 0, rightLimit = w;
+        for (Block o : all) {
+            if (o == block) continue;
+            float overlap = Math.min(block.bottom, o.bottom) - Math.max(block.top, o.top);
+            if (overlap < 0.5f * (block.bottom - block.top)) continue;
+            if (o.left >= block.right - 1f) rightLimit = Math.min(rightLimit, Math.round(o.left - 0.3f * lh));
+            else if (o.right <= block.left + 1f) leftLimit = Math.max(leftLimit, Math.round(o.right + 0.3f * lh));
+        }
+        int reach = w / 2;
+        int rx0 = clamp(Math.max(leftLimit, left0 - reach), 0, left0), rx1 = clamp(Math.min(rightLimit, right0 + reach), right0, w);
+        int rw = rx1 - rx0, rh = bottom - top;
+        int[] px = new int[rw * rh];
+        image.getPixels(px, 0, rw, rx0, top, rw, rh);
+        int left = left0, right = right0;
+        float gap = 1.2f * lh;
+        int clean = 0;
+        for (int x = right0; x < rx1; x++) {
+            int count = 0;
+            for (int y = 0; y < rh; y++) if (ink(px[y * rw + (x - rx0)], bgLuma)) count++;
+            if (count >= 0.85f * rh) break;
+            if (count > 0) { right = x + 1; clean = 0; } else if (++clean > gap) break;
+        }
+        clean = 0;
+        for (int x = left0 - 1; x >= rx0; x--) {
+            int count = 0;
+            for (int y = 0; y < rh; y++) if (ink(px[y * rw + (x - rx0)], bgLuma)) count++;
+            if (count >= 0.85f * rh) break;
+            if (count > 0) { left = x; clean = 0; } else if (++clean > gap) break;
+        }
+        Cover cover = new Cover();
+        cover.left = left; cover.right = right; cover.top = top; cover.bottom = bottom; cover.background = background;
+        cover.keepRow = new boolean[bottom - top];
+        cover.keepCol = new boolean[right - left];
+        // ruling lines in the margins around the letters stay
+        for (int y = top; y < bottom; y++) {
+            if (y >= coreTop && y < coreBottom) continue;
+            int count = 0;
+            for (int x = left0; x < right0; x++) if (ink(px[(y - top) * rw + (x - rx0)], bgLuma)) count++;
+            cover.keepRow[y - top] = count >= 0.85f * (right0 - left0);
+        }
+        for (int x = left; x < right; x++) {
+            if (x >= coreLeft && x < coreRight) continue;
+            if (x < left0 || x >= right0) continue;
+            int count = 0;
+            for (int y = 0; y < rh; y++) if (ink(px[y * rw + (x - rx0)], bgLuma)) count++;
+            cover.keepCol[x - left] = count >= 0.85f * rh;
+        }
+        return cover;
+    }
+
+    private static void wipe(Canvas canvas, Cover cover) {
+        Paint fill = new Paint();
+        fill.setColor(cover.background);
+        int y = cover.top;
+        while (y < cover.bottom) {
+            if (cover.keepRow[y - cover.top]) { y++; continue; }
+            int y2 = y;
+            while (y2 < cover.bottom && !cover.keepRow[y2 - cover.top]) y2++;
+            int x = cover.left;
+            while (x < cover.right) {
+                if (cover.keepCol[x - cover.left]) { x++; continue; }
+                int x2 = x;
+                while (x2 < cover.right && !cover.keepCol[x2 - cover.left]) x2++;
+                canvas.drawRect(x, y, x2, y2, fill);
+                x = x2;
+            }
+            y = y2;
+        }
+    }
+
+    /** Writes [translated] into the paragraph's own box, shrinking the letters until the text fits. */
+    private static void write(Canvas canvas, Bitmap image, Block block, int background, String translated) {
+        if (translated.isEmpty()) return;
         float pad = block.lineHeight * 0.12f;
         float left = Math.max(0f, block.left - pad), top = Math.max(0f, block.top - pad);
         float right = Math.min(image.getWidth(), block.right + pad), bottom = Math.min(image.getHeight(), block.bottom + pad);
         if (right - left < 2f || bottom - top < 2f) return;
-        int background = surround(image, left, top, right, bottom);
-        Paint fill = new Paint();
-        fill.setColor(background);
-        canvas.drawRect(left, top, right, bottom, fill);
-        if (translated.isEmpty()) return;
         TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(luma(background) < 128 ? Color.WHITE : Color.BLACK);
         float size = block.lineHeight * 0.82f, min = size * 0.4f;
@@ -148,7 +240,14 @@ final class LayoutTranslator {
                         Bitmap original = image.copy(Bitmap.Config.ARGB_8888, false);
                         try {
                             Canvas canvas = new Canvas(image);
-                            for (int i = 0; i < blocks.size(); i++) draw(canvas, original, blocks.get(i), done.get(i));
+                            List<Cover> covers = new ArrayList<>();
+                            for (Block b : blocks) covers.add(plan(original, b, blocks));
+                            for (Cover c : covers) if (c != null) wipe(canvas, c);   // all the wiping first, so no cover can erase a neighbour's new text
+                            for (int i = 0; i < blocks.size(); i++) {
+                                Cover c = covers.get(i);
+                                int background = c != null ? c.background : Color.WHITE;
+                                write(canvas, original, blocks.get(i), background, done.get(i));
+                            }
                         } finally { original.recycle(); }
                         translatedPages++;
                     }
