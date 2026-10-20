@@ -270,6 +270,41 @@ final class AiAssistant {
         return join(out, "\n");
     }
 
+    /** Translation of separate paragraphs, one result per paragraph (the model is asked to keep the [n] markers; a paragraph it drops is translated alone). */
+    static List<String> translateBlocks(List<String> blocks, String languageName, AtomicBoolean canceled) throws Exception {
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < blocks.size(); i++) out.add(null);
+        java.util.regex.Pattern marker = java.util.regex.Pattern.compile("^\\s*\\[(\\d+)\\]\\s*(.*)$");
+        int i = 0;
+        while (i < blocks.size()) {
+            int start = i;
+            StringBuilder material = new StringBuilder();
+            while (i < blocks.size() && (i == start || material.length() + blocks.get(i).length() < EDIT_CHUNK)) {
+                material.append('[').append(i - start + 1).append("] ").append(blocks.get(i).replace('\n', ' ').trim()).append('\n');
+                i++;
+            }
+            String reply = ask("Translate each numbered paragraph between <<< and >>> into " + languageName
+                + ". Keep every [n] marker in front of its own translation, one paragraph per marker. Output only the numbered translations, with no comments.", material.toString().trim(), 1500, canceled);
+            int current = -1;
+            for (String line : reply.split("\n")) {
+                java.util.regex.Matcher m = marker.matcher(line);
+                if (m.matches()) {
+                    int n;
+                    try { n = Integer.parseInt(m.group(1)); } catch (NumberFormatException e) { n = -1; }
+                    current = n >= 1 && start + n - 1 < i ? start + n - 1 : -1;
+                    if (current >= 0) out.set(current, m.group(2).trim());
+                } else if (current >= 0 && !line.trim().isEmpty()) {
+                    out.set(current, out.get(current) + " " + line.trim());
+                }
+            }
+        }
+        for (int k = 0; k < blocks.size(); k++) {
+            String done = out.get(k);
+            if (done == null || done.isEmpty()) out.set(k, blocks.get(k).trim().isEmpty() ? "" : translate(blocks.get(k), languageName, canceled));
+        }
+        return out;
+    }
+
     private static String join(List<String> parts, String separator) {
         StringBuilder out = new StringBuilder();
         for (String p : parts) { if (p.isEmpty()) continue; if (out.length() > 0) out.append(separator); out.append(p); }
