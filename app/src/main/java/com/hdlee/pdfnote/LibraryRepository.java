@@ -116,6 +116,37 @@ final class LibraryRepository {
             return target;
         }finally{temp.delete();}
     }
+    /** Moves (잘라내기 · 이름 변경) or copies a whole folder with its sub-folders into [destination] as [title]. Documents travel with their notes, favourites and paper;
+     *  [changes] receives one {from,to} pair per document so open tabs can follow a move. Returns the new folder. */
+    synchronized File transferFolder(File source,File destination,String title,boolean move,List<File[]> changes)throws IOException,JSONException{
+        folder(destination);if(source.equals(root)||!managed(source)||!source.isDirectory())throw new IOException("문서함의 폴더를 선택하세요");
+        String name=NotebookFiles.name(title);
+        String from=source.getCanonicalPath(),into=destination.getCanonicalPath();
+        if(into.equals(from)||into.startsWith(from+File.separator))throw new IOException("폴더를 자기 자신 안으로 옮길 수 없습니다");
+        File exact=new File(destination,name);if(move&&exact.equals(source))return source;
+        File target=move?exact:NotebookFiles.unique(destination,name);if(move&&exact.exists())throw new IOException("같은 이름의 폴더가 있습니다");
+        if(!target.mkdir())throw new IOException("폴더를 만들 수 없습니다");
+        copyFolder(source,target,move,changes);
+        if(move){preferences.edit().remove("color:"+source.getAbsolutePath()).commit();removeEmpty(source);}
+        return target;
+    }
+    private void copyFolder(File source,File target,boolean move,List<File[]> changes)throws IOException,JSONException{
+        if(preferences.contains("color:"+source.getAbsolutePath()))preferences.edit().putInt("color:"+target.getAbsolutePath(),folderColor(source)).commit();
+        for(File item:list(source)){
+            if(item.isDirectory()){File sub=new File(target,item.getName());if(!sub.isDirectory()&&!sub.mkdir())throw new IOException("폴더를 만들 수 없습니다");copyFolder(item,sub,move,changes);if(move)removeEmpty(item);}
+            else{File saved=transfer(item,target,item.getName(),move);if(changes!=null)changes.add(new File[]{item,saved});}
+        }
+    }
+    /** Deletes [directory] (and any hidden leftovers such as temp files) once it holds no documents or folders. */
+    private void removeEmpty(File directory){
+        if(!list(directory).isEmpty())return;File[] rest=directory.listFiles();if(rest!=null)for(File f:rest)if(f.isFile())f.delete();directory.delete();
+    }
+    /** Sends every document of [folder] to the trash and removes the folders. [removed] receives the documents. */
+    synchronized void trashFolder(File folder,List<File> removed)throws IOException,JSONException{
+        if(folder.equals(root)||!managed(folder)||!folder.isDirectory())throw new IOException("문서함의 폴더를 선택하세요");
+        for(File item:list(folder)){if(item.isDirectory())trashFolder(item,removed);else{trash(item);removed.add(item);}}
+        preferences.edit().remove("color:"+folder.getAbsolutePath()).commit();removeEmpty(folder);
+    }
     private void cloneAnnotations(Uri source,Uri target,int count)throws JSONException{
         AnnotationStore original=new AnnotationStore(context);original.open(source);AnnotationStore clone=new AnnotationStore(context);clone.open(target);clone.importJson(original.exportJson(source,"PDF"),count);
     }
@@ -134,9 +165,23 @@ final class LibraryRepository {
     /** Copies the PDFs found under the document tree [tree] into [destination], recreating its sub-folders. Returns how many were imported. */
     int importTree(Uri tree,File destination)throws IOException,JSONException{
         folder(destination);String rootId=android.provider.DocumentsContract.getTreeDocumentId(tree);
-        Uri rootUri=android.provider.DocumentsContract.buildDocumentUriUsingTree(tree,rootId);String rootName=rootId.substring(rootId.lastIndexOf(':')+1);rootName=rootName.substring(rootName.lastIndexOf('/')+1);
-        File top=new File(destination,NotebookFiles.name(rootName.isEmpty()?"가져온 폴더":rootName));if(!top.isDirectory()&&!top.mkdir())throw new IOException("폴더를 만들 수 없습니다");
+        Uri rootUri=android.provider.DocumentsContract.buildDocumentUriUsingTree(tree,rootId);
+        File top=new File(destination,folderName(treeName(rootUri,rootId),"가져온 폴더"));if(!top.isDirectory()&&!top.mkdir())throw new IOException("폴더를 만들 수 없습니다");
         return importChildren(tree,rootId,top);
+    }
+    /** The name the person sees for the picked folder. Document ids are not names (a Downloads pick is "msf:1234", a storage root is "primary:"), so ask the provider first. */
+    private String treeName(Uri rootUri,String rootId){
+        try(android.database.Cursor c=context.getContentResolver().query(rootUri,new String[]{android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME},null,null,null)){
+            if(c!=null&&c.moveToFirst()){String name=c.getString(0);if(name!=null&&!name.trim().isEmpty())return name;}
+        }catch(RuntimeException ignored){}
+        String name=rootId.substring(rootId.lastIndexOf(':')+1);return name.substring(name.lastIndexOf('/')+1);
+    }
+    /** A folder name that is always valid on disk: forbidden characters become "_", over-long names are cut, empty ones get [fallback]. */
+    static String folderName(String raw,String fallback){
+        String n=raw==null?"":raw.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]","_").trim();
+        while(n.startsWith("."))n=n.substring(1).trim();
+        if(n.length()>100)n=n.substring(0,100).trim();
+        return n.isEmpty()?fallback:n;
     }
     private int importChildren(Uri tree,String parentId,File into)throws IOException,JSONException{
         int count=0;Uri children=android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree,parentId);
@@ -147,7 +192,7 @@ final class LibraryRepository {
         for(String[] e:entries){
             if(e[1]==null||e[1].startsWith("."))continue;
             if(android.provider.DocumentsContract.Document.MIME_TYPE_DIR.equals(e[2])){
-                File sub=new File(into,NotebookFiles.name(e[1]));if(!sub.isDirectory()&&!sub.mkdir())continue;
+                File sub=new File(into,folderName(e[1],"폴더"));if(!sub.isDirectory()&&!sub.mkdir())continue;
                 int n=importChildren(tree,e[0],sub);count+=n;if(n==0)sub.delete();
             }else if(e[1].toLowerCase(Locale.ROOT).endsWith(".pdf")){
                 try{importPdf(android.provider.DocumentsContract.buildDocumentUriUsingTree(tree,e[0]),e[1],into);count++;}catch(IOException|JSONException|RuntimeException ignored){}
@@ -158,6 +203,9 @@ final class LibraryRepository {
     synchronized int insertPage(File file,NotebookFiles.Paper requested,int afterIndex)throws IOException{return insertPage(file,requested,afterIndex,0);}
     synchronized int insertPage(File file,NotebookFiles.Paper requested,int afterIndex,int sizeMode)throws IOException{
         if(!managed(file)||!file.isFile())throw new IOException("저장된 PDF가 아닙니다");return NotebookFiles.insert(context,file,requested,afterIndex,sizeMode);
+    }
+    synchronized int setCover(File file,CoverRenderer.Spec spec,boolean[] replaced)throws IOException{
+        if(!managed(file)||!file.isFile())throw new IOException("저장된 PDF가 아닙니다");return NotebookFiles.setCover(context,file,spec,replaced);
     }
     synchronized int deletePage(File file,int index)throws IOException{
         if(!managed(file)||!file.isFile())throw new IOException("저장된 PDF가 아닙니다");return NotebookFiles.delete(context,file,index);

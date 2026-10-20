@@ -125,6 +125,30 @@ final class NotebookFiles {
             replace(temp,file);return count;
         }finally{temp.delete();}
     }
+    /** Puts a cover (표지) in front of the document: the cover picture is drawn as page 1 in the size of the page it precedes. If the document already starts with a cover made here,
+     *  that page is replaced instead (replaced[0] = true) so the notes on the other pages keep their numbers. Returns the new page count. */
+    static int setCover(Context context,File file,CoverRenderer.Spec spec,boolean[] replaced)throws IOException{
+        File temp=File.createTempFile(".cover-",".tmp",file.getParentFile());int count;
+        try{
+            try(PDDocument pdf=PDDocument.load(file,MemoryUsageSetting.setupTempFileOnly().setTempDir(context.getCacheDir()))){
+                if(!pdf.getCurrentAccessPermission().canModify())throw new IOException("표지 추가가 허용되지 않는 PDF입니다");
+                if(pdf.getNumberOfPages()<1)throw new IOException("빈 PDF입니다");
+                com.tom_roush.pdfbox.cos.COSName mark=com.tom_roush.pdfbox.cos.COSName.getPDFName("PDFNoteCover");boolean replace=pdf.getPage(0).getCOSObject().getBoolean(mark,false);
+                PDRectangle size=pageSize(pdf,0,0);float width=size.getWidth(),height=size.getHeight();
+                int pixelsW=1240,pixelsH=Math.max(600,Math.round(pixelsW*height/width));
+                android.graphics.Bitmap bitmap=CoverRenderer.render(spec,pixelsW,pixelsH);
+                try{
+                    PDPage page=new PDPage(new PDRectangle(width,height));page.getCOSObject().setBoolean(mark,true);PDPage first=pdf.getPage(0);
+                    pdf.getPages().insertBefore(page,first);
+                    try(PDPageContentStream canvas=new PDPageContentStream(pdf,page)){canvas.drawImage(com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory.createFromImage(pdf,bitmap,.92f),0,0,width,height);}
+                    if(replace)pdf.removePage(first);
+                    replaced[0]=replace;
+                }finally{bitmap.recycle();}
+                count=pdf.getNumberOfPages();pdf.save(temp);
+            }
+            replace(temp,file);return count;
+        }finally{temp.delete();}
+    }
     /** Number of pages of a PDF. */
     static int pageCount(Context context,File file)throws IOException{
         try(PDDocument pdf=PDDocument.load(file,MemoryUsageSetting.setupTempFileOnly().setTempDir(context.getCacheDir()))){return pdf.getNumberOfPages();}

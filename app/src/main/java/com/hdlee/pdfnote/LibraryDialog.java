@@ -202,7 +202,7 @@ final class LibraryDialog extends Dialog {
         selectionCommands=new LinearLayout(activity);selectionCommands.setGravity(Gravity.CENTER_VERTICAL);selectionBar.addView(selectionCommands,new LinearLayout.LayoutParams(-2,-1));
         page.addView(selectionBar,new LinearLayout.LayoutParams(-1,dp(56)));
     }
-    private boolean allSelected(){int docs=0;for(File f:items())if(f.isFile()){docs++;if(!selected.contains(f))return false;}return docs>0;}
+    private boolean allSelected(){int docs=0;for(File f:items()){docs++;if(!selected.contains(f))return false;}return docs>0;}
     private void rebuildSelectionCommands(){
         selectionCommands.removeAllViews();
         boolean all=allSelected();
@@ -221,24 +221,24 @@ final class LibraryDialog extends Dialog {
     }
     /** ⋮ of the selection bar: the less common commands. */
     private void selectionMenu(View anchor){
-        List<File> files=new ArrayList<>(selected);boolean allFavorite=!files.isEmpty();for(File f:files)if(!repository.favorite(f))allFavorite=false;
+        List<File> picked=new ArrayList<>(selected);List<File> files=new ArrayList<>();for(File f:picked)if(f.isFile())files.add(f);boolean allFavorite=!files.isEmpty();for(File f:files)if(!repository.favorite(f))allFavorite=false;
         List<AnchoredMenu.Row> rows=new ArrayList<>();
-        if(files.size()==1)rows.add(new AnchoredMenu.Row("이름 변경",R.drawable.ic_rename,()->runSelectionCommand("이름 변경")).tint(0xFF848487));
-        rows.add(new AnchoredMenu.Row("복사본 만들기",R.drawable.ic_copy,()->runSelectionCommand("복사")).tint(0xFF848487));
-        if(files.size()>=2)rows.add(new AnchoredMenu.Row("문서 합치기",R.drawable.ic_page_add,()->{File here=mode==FOLDER?folder:repository.root;PageTools.merge(activity,repository,orderedSelection(files),here,()->{selectionMode=false;selected.clear();reload();});}).tint(0xFF848487));
-        if(files.size()==1)rows.add(new AnchoredMenu.Row("페이지 뽑아 새 파일 만들기",R.drawable.ic_page_add,()->{File here=mode==FOLDER?folder:repository.root;PageTools.extract(activity,repository,files.get(0),here,"",()->{selectionMode=false;selected.clear();reload();},null);}).tint(0xFF848487));
-        rows.add(new AnchoredMenu.Row(allFavorite?"즐겨찾기 해제":"즐겨찾기에 추가",allFavorite?R.drawable.ic_star:R.drawable.ic_star_outline,()->runSelectionCommand("즐겨찾기")).tint(0xFFF5A623));
+        if(picked.size()==1)rows.add(new AnchoredMenu.Row("이름 변경",R.drawable.ic_rename,()->runSelectionCommand("이름 변경")).tint(0xFF848487));
+        rows.add(new AnchoredMenu.Row(files.size()==picked.size()?"복사본 만들기":"복사",R.drawable.ic_copy,()->runSelectionCommand("복사")).tint(0xFF848487));
+        if(files.size()>=2&&files.size()==picked.size())rows.add(new AnchoredMenu.Row("문서 합치기",R.drawable.ic_page_add,()->{File here=mode==FOLDER?folder:repository.root;PageTools.merge(activity,repository,orderedSelection(files),here,()->{selectionMode=false;selected.clear();reload();});}).tint(0xFF848487));
+        if(files.size()==1&&picked.size()==1)rows.add(new AnchoredMenu.Row("페이지 뽑아 새 파일 만들기",R.drawable.ic_page_add,()->{File here=mode==FOLDER?folder:repository.root;PageTools.extract(activity,repository,files.get(0),here,"",()->{selectionMode=false;selected.clear();reload();},null);}).tint(0xFF848487));
+        if(!files.isEmpty())rows.add(new AnchoredMenu.Row(allFavorite?"즐겨찾기 해제":"즐겨찾기에 추가",allFavorite?R.drawable.ic_star:R.drawable.ic_star_outline,()->runSelectionCommand("즐겨찾기")).tint(0xFFF5A623));
         AnchoredMenu.show(activity,anchor,false,rows,null);
     }
     /** The selected documents in the order they are shown. */
     private List<File> orderedSelection(List<File> files){List<File> ordered=new ArrayList<>();for(File f:items())if(files.contains(f))ordered.add(f);for(File f:files)if(!ordered.contains(f))ordered.add(f);return ordered;}
     private void runSelectionCommand(String action){
         List<File> files=new ArrayList<>(selected);
-        if(action.equals("전체")){if(allSelected())selected.clear();else for(File item:items())if(item.isFile())selected.add(item);refreshGrid();return;}
+        if(action.equals("전체")){if(allSelected())selected.clear();else selected.addAll(items());refreshGrid();return;}
         if(files.isEmpty()){Toast.makeText(activity,"문서를 선택하세요",Toast.LENGTH_SHORT).show();return;}
-        if(action.equals("즐겨찾기")){boolean allFavorite=true;for(File f:files)if(!repository.favorite(f))allFavorite=false;for(File f:files)repository.favorite(f,!allFavorite);selectionMode=false;selected.clear();refresh();Toast.makeText(activity,allFavorite?"즐겨찾기에서 뺐습니다":"즐겨찾기에 추가했습니다",Toast.LENGTH_SHORT).show();}
+        if(action.equals("즐겨찾기")){boolean allFavorite=true;for(File f:files)if(f.isFile()&&!repository.favorite(f))allFavorite=false;for(File f:files)if(f.isFile())repository.favorite(f,!allFavorite);selectionMode=false;selected.clear();refresh();Toast.makeText(activity,allFavorite?"즐겨찾기에서 뺐습니다":"즐겨찾기에 추가했습니다",Toast.LENGTH_SHORT).show();}
         else if(action.equals("이름 변경"))rename(files.get(0));
-        else if(action.equals("공유"))share(files);
+        else if(action.equals("공유")){List<File> docs=new ArrayList<>();for(File f:files)if(f.isFile())docs.add(f);if(docs.isEmpty())Toast.makeText(activity,"폴더는 공유할 수 없습니다. 문서를 선택하세요",Toast.LENGTH_SHORT).show();else share(docs);}
         else if(action.equals("삭제"))deleteDocuments(files);
         else chooseDestination(files,action.equals("이동"));
     }
@@ -331,8 +331,8 @@ final class LibraryDialog extends Dialog {
         }else{
             ImageView cover=new ImageView(activity);cover.setScaleType(ImageView.ScaleType.CENTER_CROP);cover.setBackground(roundStroke(Color.WHITE,8,0x1F000000));cover.setClipToOutline(true);cover.setOutlineProvider(new ViewOutlineProvider(){public void getOutline(View v,Outline outline){outline.setRoundRect(0,0,v.getWidth(),v.getHeight(),dp(8));}});cover.setImageDrawable(null);cover.setContentDescription(title+" 미리보기");FrameLayout.LayoutParams cvp=new FrameLayout.LayoutParams(-1,-1);coverFrame.addView(cover,cvp);preview(file,cover,version);
             if(trashed==null&&repository.favorite(file)){ImageView star=new ImageView(activity);star.setImageResource(R.drawable.ic_star);star.setColorFilter(0xFFFFB020);star.setPadding(dp(3),dp(3),dp(3),dp(3));FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(dp(22),dp(22),Gravity.END|Gravity.TOP);sp.setMargins(0,dp(4),dp(4),0);coverFrame.addView(star,sp);}
-            if(selectionMode){CheckBox check=new CheckBox(activity);check.setChecked(selected.contains(file));check.setContentDescription("선택 "+file.getName());check.setOnClickListener(v->toggleSelected(file));FrameLayout.LayoutParams kp=new FrameLayout.LayoutParams(dp(40),dp(40),Gravity.START|Gravity.TOP);kp.setMargins(dp(2),dp(2),0,0);coverFrame.addView(check,kp);}
-        }
+            }
+        if(selectionMode&&trashed==null){CheckBox check=new CheckBox(activity);check.setChecked(selected.contains(file));check.setContentDescription("선택 "+file.getName());check.setOnClickListener(v->toggleSelected(file));FrameLayout.LayoutParams kp=new FrameLayout.LayoutParams(dp(40),dp(40),Gravity.START|Gravity.TOP);kp.setMargins(dp(2),dp(2),0,0);coverFrame.addView(check,kp);}
         TextView name=label(title.replaceFirst("(?i)\\.pdf$",""),13,INK);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);name.setGravity(Gravity.CENTER);name.setPadding(dp(2),dp(8),dp(2),0);card.addView(name,new LinearLayout.LayoutParams(-1,-2));
         if(file.isFile()){TextView date=label(trashed!=null?"삭제 "+dayText(trashed.deleted):dateText(file),11,MUTED);date.setGravity(Gravity.CENTER);card.addView(date,new LinearLayout.LayoutParams(-1,dp(20)));}
         View.OnClickListener open=v->{if(trashed!=null)trashItemMenu(trashed,v);else openOrSelect(file);};card.setOnClickListener(open);coverFrame.setOnClickListener(open);
@@ -360,10 +360,10 @@ final class LibraryDialog extends Dialog {
         LinearLayout text=new LinearLayout(activity);text.setOrientation(LinearLayout.VERTICAL);text.setPadding(dp(14),0,dp(4),0);TextView name=label(file.getName().replaceFirst("(?i)\\.pdf$",""),15,INK);name.setMaxLines(2);name.setEllipsize(TextUtils.TruncateAt.END);name.setTypeface(Typeface.DEFAULT_BOLD);text.addView(name,new LinearLayout.LayoutParams(-1,-2));
         TextView meta=label(file.isDirectory()?repository.list(file).size()+"개 항목":dateText(file)+(mode==ALL||mode==FAVORITES||mode==RECENT?" · "+(file.getParentFile().equals(repository.root)?"문서함":file.getParentFile().getName()):""),12,MUTED);text.addView(meta,new LinearLayout.LayoutParams(-1,-2));row.addView(text,new LinearLayout.LayoutParams(0,-2,1));
         if(file.isFile()&&repository.favorite(file)){ImageView star=new ImageView(activity);star.setImageResource(R.drawable.ic_star);star.setColorFilter(0xFFFFB020);row.addView(star,new LinearLayout.LayoutParams(dp(22),dp(22)));}
-        if(selectionMode&&file.isFile()){CheckBox check=new CheckBox(activity);check.setChecked(selected.contains(file));check.setContentDescription("선택 "+file.getName());check.setOnClickListener(v->toggleSelected(file));row.addView(check,new LinearLayout.LayoutParams(dp(40),dp(48)));}
+        if(selectionMode){CheckBox check=new CheckBox(activity);check.setChecked(selected.contains(file));check.setContentDescription("선택 "+file.getName());check.setOnClickListener(v->toggleSelected(file));row.addView(check,new LinearLayout.LayoutParams(dp(40),dp(48)));}
         row.setOnClickListener(v->openOrSelect(file));row.setOnLongClickListener(v->{longPressed(file,v);return true;});return row;
     }
-    private void openOrSelect(File file){if(file.isDirectory())selectFolder(file);else if(selectionMode)toggleSelected(file);else{dismiss();actions.open(file);}}
+    private void openOrSelect(File file){if(selectionMode)toggleSelected(file);else if(file.isDirectory())selectFolder(file);else{dismiss();actions.open(file);}}
     private void toggleSelected(File file){if(!selected.remove(file))selected.add(file);refreshGrid();}
 
     // ---------------------------------------------------------------- menus and actions
@@ -415,7 +415,17 @@ final class LibraryDialog extends Dialog {
         if(preselected!=null&&preselected.isFile()&&preselected.getParentFile()!=null)selectFolder(preselected.getParentFile());
         selectionMode=true;selected.clear();if(preselected!=null&&preselected.isFile())selected.add(preselected);refreshGrid();
     }
-    private void folderMenu(File target,View anchor){PopupMenu menu=new PopupMenu(activity,anchor);menu.getMenu().add("폴더 색상");menu.getMenu().add("하위 폴더 만들기");menu.getMenu().add("이 폴더 일괄 백업");menu.setOnMenuItemClickListener(item->{if(item.getTitle().equals("폴더 색상"))chooseFolderColor(target);else if(item.getTitle().equals("이 폴더 일괄 백업"))actions.backupFolder(target);else createFolder(target,()->{tree.reload();refresh();});return true;});menu.show();}
+    private void folderMenu(File target,View anchor){
+        PopupMenu menu=new PopupMenu(activity,anchor);boolean top=target.equals(repository.root);
+        if(!top){menu.getMenu().add("선택");menu.getMenu().add("이름 바꾸기");menu.getMenu().add("잘라내기 (이동)");menu.getMenu().add("복사");}
+        menu.getMenu().add("폴더 색상");menu.getMenu().add("하위 폴더 만들기");menu.getMenu().add("이 폴더 일괄 백업");if(!top)menu.getMenu().add("삭제");
+        menu.setOnMenuItemClickListener(item->{String t=item.getTitle().toString();
+            if(t.equals("선택")){selectFolder(target.getParentFile());selectionMode=true;selected.add(target);refreshGrid();}
+            else if(t.equals("이름 바꾸기"))rename(target);
+            else if(t.equals("잘라내기 (이동)"))chooseDestination(Collections.singletonList(target),true);
+            else if(t.equals("복사"))chooseDestination(Collections.singletonList(target),false);
+            else if(t.equals("삭제"))deleteDocuments(Collections.singletonList(target));
+            else if(t.equals("폴더 색상"))chooseFolderColor(target);else if(t.equals("이 폴더 일괄 백업"))actions.backupFolder(target);else createFolder(target,()->{tree.reload();refresh();});return true;});menu.show();}
     private void chooseFolderColor(File target){int current=0;for(int i=0;i<LibraryRepository.FOLDER_COLORS.length;i++)if(LibraryRepository.FOLDER_COLORS[i]==repository.folderColor(target))current=i;
         new AlertDialog.Builder(activity).setTitle("폴더 색상 · "+(target.equals(repository.root)?"문서함":target.getName())).setSingleChoiceItems(LibraryRepository.FOLDER_COLOR_NAMES,current,(d,index)->{repository.folderColor(target,LibraryRepository.FOLDER_COLORS[index]);d.dismiss();tree.reload();refreshGrid();}).setNegativeButton("취소",null).show();}
     private void share(List<File> files){
@@ -427,14 +437,17 @@ final class LibraryDialog extends Dialog {
             activity.startActivity(Intent.createChooser(send,"문서 공유"));
         }catch(Exception error){Toast.makeText(activity,"공유할 수 없습니다: "+error.getMessage(),Toast.LENGTH_LONG).show();}
     }
-    private void rename(File file){EditText input=new EditText(activity);input.setSingleLine();input.setText(file.getName().replaceFirst("(?i)\\.pdf$",""));input.selectAll();AlertDialog dialog=new AlertDialog.Builder(activity).setTitle("이름 변경").setView(input).setPositiveButton("저장",null).setNegativeButton("취소",null).create();dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{String name=input.getText().toString().trim();if(name.isEmpty()){input.setError("이름을 입력하세요");return;}dialog.dismiss();transfer(file,file.getParentFile(),name,true);}));dialog.show();}
+    private void rename(File file){EditText input=new EditText(activity);input.setSingleLine();input.setText(file.isDirectory()?file.getName():file.getName().replaceFirst("(?i)\\.pdf$",""));input.selectAll();AlertDialog dialog=new AlertDialog.Builder(activity).setTitle(file.isDirectory()?"폴더 이름 바꾸기":"이름 변경").setView(input).setPositiveButton("저장",null).setNegativeButton("취소",null).create();dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{String name=input.getText().toString().trim();if(name.isEmpty()){input.setError("이름을 입력하세요");return;}dialog.dismiss();if(file.isDirectory())transferMany(Collections.singletonList(file),file.getParentFile(),true,name);else transfer(file,file.getParentFile(),name,true);}));dialog.show();}
     private void chooseDestination(List<File> files,boolean move){
         LinearLayout panel=new LinearLayout(activity);panel.setOrientation(LinearLayout.VERTICAL);FolderTreeView picker=new FolderTreeView(activity,repository,folder,f->{});panel.addView(picker,new LinearLayout.LayoutParams(-1,dp(340)));TextView add=button("＋ 폴더 만들기","대상 폴더 만들기",v->createFolder(picker.selected(),picker::reload));panel.addView(add,new LinearLayout.LayoutParams(-1,dp(44)));
-        new AlertDialog.Builder(activity).setTitle(move?"이동할 폴더":"복사할 폴더").setView(panel).setPositiveButton(move?"이곳으로 이동":"이곳에 복사",(d,w)->transferMany(files,picker.selected(),move)).setNegativeButton("취소",null).show();
+        new AlertDialog.Builder(activity).setTitle(move?"이동할 폴더 (잘라내기)":"복사할 폴더").setView(panel).setPositiveButton(move?"이곳으로 이동":"이곳에 복사",(d,w)->transferMany(files,picker.selected(),move)).setNegativeButton("취소",null).show();
     }
     private void transfer(File file,File target,String name,boolean move){if(busy)return;busy=true;ProgressDialog progress=ProgressDialog.show(activity,"",move?"문서를 이동하는 중…":"문서를 복사하는 중…",true,false);new Thread(()->{try{File saved=repository.transfer(file,target,name,move);activity.runOnUiThread(()->{busy=false;progress.dismiss();actions.changed(file,saved,move);selectionMode=false;selected.clear();refresh();});}catch(Exception error){activity.runOnUiThread(()->{busy=false;progress.dismiss();Toast.makeText(activity,error.getMessage(),Toast.LENGTH_LONG).show();});}}).start();}
-    private void transferMany(List<File> files,File destination,boolean move){if(busy)return;busy=true;ProgressDialog progress=ProgressDialog.show(activity,"",move?"문서를 이동하는 중…":"문서를 복사하는 중…",true,false);new Thread(()->{List<File[]> changes=new ArrayList<>();String error="";for(File file:files)try{changes.add(new File[]{file,repository.transfer(file,destination,file.getName(),move)});}catch(Exception failure){error=failure.getMessage()==null?"작업에 실패했습니다":failure.getMessage();}final String message=error;activity.runOnUiThread(()->{busy=false;progress.dismiss();for(File[] change:changes)actions.changed(change[0],change[1],move);selectionMode=false;selected.clear();refresh();if(!message.isEmpty())Toast.makeText(activity,message,Toast.LENGTH_LONG).show();});}).start();}
-    private void deleteDocuments(List<File> files){new AlertDialog.Builder(activity).setTitle("문서 삭제").setMessage(files.size()+"개 문서를 휴지통으로 이동할까요?").setPositiveButton("삭제",(d,w)->{if(busy)return;busy=true;ProgressDialog progress=ProgressDialog.show(activity,"","휴지통으로 이동하는 중…",true,false);new Thread(()->{List<File> removed=new ArrayList<>();String error="";for(File file:files)try{repository.trash(file);removed.add(file);}catch(Exception failure){error=failure.getMessage()==null?"삭제에 실패했습니다":failure.getMessage();}final String message=error;activity.runOnUiThread(()->{busy=false;progress.dismiss();actions.removed(removed);selectionMode=false;selected.clear();refresh();if(!message.isEmpty())Toast.makeText(activity,message,Toast.LENGTH_LONG).show();});}).start();}).setNegativeButton("취소",null).show();}
+    private void transferMany(List<File> files,File destination,boolean move){transferMany(files,destination,move,null);}
+    /** Moves or copies documents and whole folders; [name] renames a single item (used by 폴더 이름 바꾸기). */
+    private void transferMany(List<File> files,File destination,boolean move,String name){if(busy)return;busy=true;ProgressDialog progress=ProgressDialog.show(activity,"",move?"옮기는 중…":"복사하는 중…",true,false);new Thread(()->{List<File[]> changes=new ArrayList<>();String error="";for(File file:files)try{String title=name!=null?name:file.getName();if(file.isDirectory())repository.transferFolder(file,destination,title,move,changes);else changes.add(new File[]{file,repository.transfer(file,destination,title,move)});}catch(Exception failure){error=failure.getMessage()==null?"작업에 실패했습니다":failure.getMessage();}final String message=error;activity.runOnUiThread(()->{busy=false;progress.dismiss();for(File[] change:changes)actions.changed(change[0],change[1],move);selectionMode=false;selected.clear();if(tree!=null)tree.reload();refresh();if(!message.isEmpty())Toast.makeText(activity,message,Toast.LENGTH_LONG).show();});}).start();}
+    private void deleteDocuments(List<File> files){int folders=0;for(File f:files)if(f.isDirectory())folders++;
+        new AlertDialog.Builder(activity).setTitle(folders>0?"삭제":"문서 삭제").setMessage(folders>0?(files.size()==1?"‘"+files.get(0).getName()+"’ 폴더와 그 안의 문서를 휴지통으로 이동할까요?":files.size()+"개 항목(폴더 안의 문서 포함)을 휴지통으로 이동할까요?"):files.size()+"개 문서를 휴지통으로 이동할까요?").setPositiveButton("삭제",(d,w)->{if(busy)return;busy=true;ProgressDialog progress=ProgressDialog.show(activity,"","휴지통으로 이동하는 중…",true,false);new Thread(()->{List<File> removed=new ArrayList<>();String error="";for(File file:files)try{if(file.isDirectory())repository.trashFolder(file,removed);else{repository.trash(file);removed.add(file);}}catch(Exception failure){error=failure.getMessage()==null?"삭제에 실패했습니다":failure.getMessage();}final String message=error;activity.runOnUiThread(()->{busy=false;progress.dismiss();actions.removed(removed);selectionMode=false;selected.clear();if(tree!=null)tree.reload();refresh();if(!message.isEmpty())Toast.makeText(activity,message,Toast.LENGTH_LONG).show();});}).start();}).setNegativeButton("취소",null).show();}
     private void showTrash(){showMode(TRASH);}
     /** Tapping a document in 휴지통: 복원 or 영구 삭제 (the trash is a normal view, as in Samsung Notes). */
     private void trashItemMenu(LibraryRepository.TrashItem item,View anchor){
