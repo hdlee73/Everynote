@@ -157,7 +157,7 @@ final class AiTools {
     }
 
     /** A free file name beside the open document for a new PDF made from it. */
-    private File newTarget(String suffix) {
+    private File newTarget(String suffix) throws java.io.IOException {
         File self = host.uri() != null && "file".equals(host.uri().getScheme()) && host.uri().getPath() != null ? new File(host.uri().getPath()) : null;
         File folder = self != null && host.library().managed(self) ? self.getParentFile() : host.library().root;
         return NotebookFiles.unique(folder, NotebookFiles.pdfName(stem(host.title()) + " (" + suffix + ")"));
