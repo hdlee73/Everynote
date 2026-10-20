@@ -206,7 +206,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         showTranslationResult(source,translated==null?"":translated.toString(),bounds);
     }
 
-    @Override protected void onCreate(Bundle state){super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);recentPrefs=getSharedPreferences("recent_documents",MODE_PRIVATE);verticalPageSwipe=recentPrefs.getBoolean("vertical_page_swipe",false);fingerInk=recentPrefs.getBoolean("finger_ink",false);swipeEnabled=recentPrefs.getBoolean("page_swipe_enabled_v2",true);twoPage=recentPrefs.getBoolean("two_page",false);library=new LibraryRepository(this);com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(getApplicationContext());libraryFolder=library.root;lassoShape=recentPrefs.getInt("lasso_shape",PdfPageView.LASSO_FREE);showAllThumbnails=recentPrefs.getBoolean("thumb_all",true);buildUi();pageView.setLassoShape(lassoShape);applyDarkPage();inkPen=recentPrefs.getInt("ink_pen",0);pageView.setInkPen(inkPen);hlInkColor=recentPrefs.getInt("hl_ink_color",hlInkColor);tapeInkColor=recentPrefs.getInt("tape_ink_color",tapeInkColor);tapeInkWidth=Math.max(.012f,Math.min(.08f,recentPrefs.getFloat("tape_ink_width",tapeInkWidth)));hlTape=recentPrefs.getBoolean("hl_tape",false);hlInkWidth=Math.max(.004f,Math.min(.04f,recentPrefs.getFloat("hl_ink_width",hlInkWidth)));thumbInk=recentPrefs.getBoolean("thumb_ink",false);selectedColor=(Math.max(26,Math.min(255,recentPrefs.getInt("highlight_alpha",Color.alpha(selectedColor))))<<24)|(selectedColor&0xFFFFFF);firstPageView.setEraserRadius(recentPrefs.getFloat("eraser_radius",10f));secondPageView.setEraserRadius(recentPrefs.getFloat("eraser_radius",10f));firstPageView.setEraserPartial(recentPrefs.getBoolean("eraser_partial",true));secondPageView.setEraserPartial(recentPrefs.getBoolean("eraser_partial",true));pageView.setFingerInk(fingerInk);pageView.setPageSwipeEnabled(swipeEnabled);pageView.setVerticalPageSwipe(verticalPageSwipe);syncOtherTools();Uri u=getIntent().getData();if(u!=null)openPdf(u);else if(!restoreSession())showWelcome();}
+    @Override protected void onCreate(Bundle state){super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);recentPrefs=getSharedPreferences("recent_documents",MODE_PRIVATE);verticalPageSwipe=recentPrefs.getBoolean("vertical_page_swipe",false);fingerInk=recentPrefs.getBoolean("finger_ink",false);swipeEnabled=recentPrefs.getBoolean("page_swipe_enabled_v2",true);twoPage=recentPrefs.getBoolean("two_page",false);library=new LibraryRepository(this);com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(getApplicationContext());libraryFolder=library.root;lassoShape=recentPrefs.getInt("lasso_shape",PdfPageView.LASSO_FREE);showAllThumbnails=recentPrefs.getBoolean("thumb_all",true);buildUi();checkAiSupport();pageView.setLassoShape(lassoShape);applyDarkPage();inkPen=recentPrefs.getInt("ink_pen",0);pageView.setInkPen(inkPen);hlInkColor=recentPrefs.getInt("hl_ink_color",hlInkColor);tapeInkColor=recentPrefs.getInt("tape_ink_color",tapeInkColor);tapeInkWidth=Math.max(.012f,Math.min(.08f,recentPrefs.getFloat("tape_ink_width",tapeInkWidth)));hlTape=recentPrefs.getBoolean("hl_tape",false);hlInkWidth=Math.max(.004f,Math.min(.04f,recentPrefs.getFloat("hl_ink_width",hlInkWidth)));thumbInk=recentPrefs.getBoolean("thumb_ink",false);selectedColor=(Math.max(26,Math.min(255,recentPrefs.getInt("highlight_alpha",Color.alpha(selectedColor))))<<24)|(selectedColor&0xFFFFFF);firstPageView.setEraserRadius(recentPrefs.getFloat("eraser_radius",10f));secondPageView.setEraserRadius(recentPrefs.getFloat("eraser_radius",10f));firstPageView.setEraserPartial(recentPrefs.getBoolean("eraser_partial",true));secondPageView.setEraserPartial(recentPrefs.getBoolean("eraser_partial",true));pageView.setFingerInk(fingerInk);pageView.setPageSwipeEnabled(swipeEnabled);pageView.setVerticalPageSwipe(verticalPageSwipe);syncOtherTools();Uri u=getIntent().getData();if(u!=null)openPdf(u);else if(!restoreSession())showWelcome();}
     private void applyKeepAwake(){if(recentPrefs.getBoolean("keep_awake",false))getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
     @Override protected void onResume(){super.onResume();enforceChrome();applyKeepAwake();root.postDelayed(this::autoCheckForUpdate,4000);if(awaitingOfficeReturn){awaitingOfficeReturn=false;root.post(()->new AlertDialog.Builder(this).setTitle("문서로 돌아왔습니다")
         .setMessage("문서 앱에서 PDF로 내보냈다면 파일을 가져와 필기와 주석을 이어갈 수 있습니다.")
@@ -228,6 +228,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         headerAction(R.drawable.ic_page_manage,"페이지 관리","페이지 관리","h_pages",v->showPageManageMenu(v));
         headerAction(R.drawable.ic_note_style,"노트 스타일","노트 스타일","h_style",v->showViewMenu(v));
         insertButton=headerAction(R.drawable.ic_insert,"삽입","삽입","h_insert",v->showInsertMenu(v));
+        headerAction(R.drawable.ic_magic,"AI","AI (Gemini Nano)","h_ai",v->showAiMenu(v));
         headerAction(R.drawable.ic_share,"공유","공유","h_share",v->showShareMenu(v));
         headerAction(R.drawable.ic_save_file,"파일로 저장","파일로 저장","h_save",v->showSaveMenu(v));
         headerAction(R.drawable.ic_print,"인쇄","인쇄","h_print",v->{if(renderer!=null)printDocument();else toast("문서를 먼저 여세요");});
@@ -325,7 +326,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         int width=Math.round(w/getResources().getDisplayMetrics().density);boolean labels=width>=1180,opt=width>=820,narrow=width<560;
         int max=Math.max(dp(60),Math.min(Math.round(w*.46f),w-dp(labels?960:width>=820?470:width>=560?350:270)));if(titleView.getMaxWidth()!=max)titleView.setMaxWidth(max);
         for(int i=0;i<header.getChildCount();i++){final View hc=header.getChildAt(i);Object tag=hc.getTag();if(!(tag instanceof String)||!((String)tag).startsWith("h_"))continue;String t=(String)tag;
-            final boolean show=(opt||!(t.equals("h_share")||t.equals("h_save")||t.equals("h_print")))&&!(narrow&&(t.equals("h_pages")||t.equals("h_fullscreen")));
+            final boolean show=(opt||!(t.equals("h_share")||t.equals("h_save")||t.equals("h_print")||t.equals("h_ai")))&&!(narrow&&(t.equals("h_pages")||t.equals("h_fullscreen")))&&(aiSupported||!t.equals("h_ai"));
             if(hc.getVisibility()!=(show?View.VISIBLE:View.GONE))hc.post(()->hc.setVisibility(show?View.VISIBLE:View.GONE));
             final View lbl=hc.findViewWithTag("header_label");if(lbl!=null&&lbl.getVisibility()!=(labels?View.VISIBLE:View.GONE))lbl.post(()->lbl.setVisibility(labels?View.VISIBLE:View.GONE));}
     }
@@ -573,6 +574,30 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     }
     private void setEraserRadius(float dp){recentPrefs.edit().putFloat("eraser_radius",dp).apply();for(PdfPageView v:paneViews)if(v!=null)v.setEraserRadius(dp);}
     private void applyHighlightStyle(){pageView.setHighlightStyle(false,highlightThick);syncOtherTools();}
+    /** Gemini Nano (on-device AI) menu. Whether the phone supports it is checked once at start; without support the button is hidden and ⋮ explains why. */
+    private boolean aiSupported;private AiTools aiTools;
+    private void checkAiSupport(){new Thread(()->{final boolean ok=AiAssistant.supported();runOnUiThread(()->{aiSupported=ok;if(header!=null&&header.getWidth()>0)applyHeaderWidth(header.getWidth());});},"ai-check").start();}
+    private void showAiMenu(View anchor){
+        if(!aiSupported){AiTools.explainUnsupported(this);return;}
+        if(renderer==null||activeSession==null){toast("문서를 먼저 여세요");return;}
+        if(aiTools==null)aiTools=new AiTools(this,new AiTools.Host(){
+            @Override public Uri uri(){return documentUri;}
+            @Override public String title(){return documentTitle;}
+            @Override public int pageCount(){return renderer==null?0:renderer.getPageCount();}
+            @Override public int currentPage(){return currentPage;}
+            @Override public LibraryRepository library(){return library;}
+            @Override public void flush(){if(store!=null)store.save();}
+            @Override public void openBeside(File made){if(splitMode)exitSplit();splitWantedSession=activeSession;splitWantedAt=SystemClock.elapsedRealtime();openPdf(Uri.fromFile(made));}
+            @Override public void rename(String title){DocumentSession s=activeSession;if(s==null||!library.managed(s.uri)){toast("문서함에 저장한 뒤 이름을 변경하세요");return;}final File before=new File(s.uri.getPath());s.store.save();
+                new Thread(()->{try{File after=library.transfer(before,before.getParentFile(),NotebookFiles.pdfName(title),true);runOnUiThread(()->{libraryChanged(before,after);toast("문서 이름을 ‘"+title+"’(으)로 바꿨습니다");});}catch(Exception error){runOnUiThread(()->toast("이름을 바꿀 수 없습니다: "+error.getMessage()));}},"ai-rename").start();}
+        });
+        final AiTools ai=aiTools;
+        AnchoredMenu.show(this,anchor,!inHeader(anchor),AnchoredMenu.rows(
+            new AnchoredMenu.Row("문서 요약",R.drawable.ic_outline,ai::summarize).tint(NAVY),
+            new AnchoredMenu.Row("제목·태그 제안",R.drawable.ic_star_outline,ai::suggestTitleAndTags).tint(NAVY),
+            new AnchoredMenu.Row("맞춤법 교정",R.drawable.ic_check_circle,ai::proofread).tint(NAVY),
+            new AnchoredMenu.Row("문서 번역 (새 문서로)",R.drawable.ic_translate,ai::translate).tint(NAVY)),null);
+    }
     private void showViewMenu(View anchor){
         if(renderer==null){toast("문서를 먼저 여세요");return;}
         List<AnchoredMenu.Row> rows=AnchoredMenu.rows(
@@ -647,6 +672,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
             rows.add(AnchoredMenu.Row.divider());
             if(headerHidden("h_share"))rows.add(new AnchoredMenu.Row("공유",R.drawable.ic_share,null).children(shareRows()).tint(NAVY).submenu());
             if(headerHidden("h_save"))rows.add(new AnchoredMenu.Row("파일로 저장",R.drawable.ic_save_file,null).children(saveRows()).tint(NAVY).submenu());
+            if(headerHidden("h_ai"))rows.add(new AnchoredMenu.Row(aiSupported?"AI (요약·번역·교정)":"AI (이 기기에서는 사용 불가)",R.drawable.ic_magic,()->anchor.post(()->showAiMenu(anchor))).tint(aiSupported?NAVY:MUTED));
             if(headerHidden("h_pages"))rows.add(new AnchoredMenu.Row("페이지 관리",R.drawable.ic_page_manage,()->anchor.post(()->showPageManageMenu(anchor))).tint(NAVY));
             rows.add(new AnchoredMenu.Row("메모·하이라이트",R.drawable.ic_highlight,this::showMarkList).tint(NAVY));
             rows.add(new AnchoredMenu.Row("책갈피 목록",R.drawable.ic_star,this::showBookmarks).tint(NAVY));
