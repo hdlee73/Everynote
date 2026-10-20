@@ -32,11 +32,15 @@ final class LibraryRepository {
     void folderColor(File folder,int color){preferences.edit().putInt("color:"+folder.getAbsolutePath(),color).apply();}
     void opened(Uri uri){if(managed(uri))preferences.edit().putLong("opened:"+uri.getPath(),System.currentTimeMillis()).apply();}
     List<File> sorted(File directory,String query){
-        List<File> items=list(directory);String q=query.trim().toLowerCase(Locale.ROOT);items.removeIf(f->!f.getName().toLowerCase(Locale.ROOT).contains(q));
+        List<File> items=list(directory);String q=query.trim().toLowerCase(Locale.ROOT);items.removeIf(f->!matches(f,q));
         items.sort(Comparator.comparing((File f)->!f.isDirectory()).thenComparing(order()));return items;
     }
+    private boolean matches(File file,String lowerQuery){if(file.getName().toLowerCase(Locale.ROOT).contains(lowerQuery))return true;if(file.isDirectory()||lowerQuery.isEmpty())return false;for(String t:tags(file))if(t.toLowerCase(Locale.ROOT).contains(lowerQuery))return true;return false;}
     boolean favorite(File file){return preferences.getBoolean("fav:"+file.getAbsolutePath(),false);}
     void favorite(File file,boolean on){SharedPreferences.Editor edit=preferences.edit();if(on)edit.putBoolean("fav:"+file.getAbsolutePath(),true);else edit.remove("fav:"+file.getAbsolutePath());edit.apply();}
+    /** Tags suggested by the AI menu (and kept by the user); the shelf's name search also matches them. */
+    List<String> tags(File file){String raw=preferences.getString("tags:"+file.getAbsolutePath(),"");List<String> out=new ArrayList<>();if(!raw.isEmpty())for(String t:raw.split("\n"))if(!t.isEmpty())out.add(t);return out;}
+    void tags(File file,List<String> tags){SharedPreferences.Editor edit=preferences.edit();if(tags==null||tags.isEmpty())edit.remove("tags:"+file.getAbsolutePath());else edit.putString("tags:"+file.getAbsolutePath(),android.text.TextUtils.join("\n",tags));edit.apply();}
     boolean pinFavorites(){return preferences.getBoolean("pin_favorites",false);}
     void pinFavorites(boolean on){preferences.edit().putBoolean("pin_favorites",on).apply();}
     /** Favorite documents from every folder, in the current sort order. */
@@ -53,7 +57,7 @@ final class LibraryRepository {
     }
     /** Every PDF and note in the library, whatever folder it lives in (the trash is excluded), in the current sort order. */
     List<File> allDocuments(String query){
-        List<File> items=new ArrayList<>();collectDocuments(root,items);String q=query.trim().toLowerCase(Locale.ROOT);items.removeIf(f->!f.getName().toLowerCase(Locale.ROOT).contains(q));items.sort(order());return items;
+        List<File> items=new ArrayList<>();collectDocuments(root,items);String q=query.trim().toLowerCase(Locale.ROOT);items.removeIf(f->!matches(f,q));items.sort(order());return items;
     }
     private void collectDocuments(File directory,List<File> into){for(File item:list(directory)){if(item.isDirectory())collectDocuments(item,into);else into.add(item);}}
     private long modified(File file){return modifiedTime(context,file);}
@@ -110,7 +114,7 @@ final class LibraryRepository {
             cloneAnnotations(Uri.fromFile(source),Uri.fromFile(target),Integer.MAX_VALUE);NotebookFiles.replace(temp,target);
             NotebookFiles.Paper paper=paper(source);if(paper!=null)putPaper(target,paper);
             if(move){if(!source.delete()){target.delete();throw new IOException("원본을 이동할 수 없습니다");}
-                SharedPreferences.Editor edit=preferences.edit().remove("fav:"+source.getAbsolutePath()).remove("paper:"+source.getAbsolutePath()).remove("opened:"+source.getAbsolutePath()).putLong("opened:"+target.getAbsolutePath(),preferences.getLong("opened:"+source.getAbsolutePath(),0));if(preferences.getBoolean("fav:"+source.getAbsolutePath(),false))edit.putBoolean("fav:"+target.getAbsolutePath(),true);
+                SharedPreferences.Editor edit=preferences.edit().remove("fav:"+source.getAbsolutePath()).remove("paper:"+source.getAbsolutePath()).remove("opened:"+source.getAbsolutePath()).remove("tags:"+source.getAbsolutePath()).putString("tags:"+target.getAbsolutePath(),preferences.getString("tags:"+source.getAbsolutePath(),"")).putLong("opened:"+target.getAbsolutePath(),preferences.getLong("opened:"+source.getAbsolutePath(),0));if(preferences.getBoolean("fav:"+source.getAbsolutePath(),false))edit.putBoolean("fav:"+target.getAbsolutePath(),true);
                 for(Map.Entry<String,?> entry:preferences.getAll().entrySet())if(entry.getKey().startsWith("source:")&&source.getAbsolutePath().equals(entry.getValue()))edit.putString(entry.getKey(),target.getAbsolutePath());edit.commit();
             }
             return target;

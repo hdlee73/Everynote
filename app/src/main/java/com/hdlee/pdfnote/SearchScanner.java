@@ -517,6 +517,26 @@ final class SearchScanner {
         return truncated;
     }
 
+    /**
+     * The running text of pages [first]..[last] (0-based, inclusive), one string per page: the PDF text layer, or OCR for scanned pages.
+     * Used by the AI features. Stops early with the pages read so far when [canceled] is set.
+     */
+    static List<String> pageTexts(Context context, Uri uri, int first, int last, AtomicBoolean canceled, java.util.function.BiConsumer<Integer, Integer> progress) throws Exception {
+        List<String> texts = new ArrayList<>();
+        Index index = index(context, uri);
+        try (Engine engine = new Engine(context, uri)) {
+            for (int page = first; page <= last && !canceled.get(); page++) {
+                if (progress != null) progress.accept(page - first, last - first + 1);
+                List<String> lines = new ArrayList<>();
+                for (Line line : bodyLines(engine, index, page, false)) lines.add(line.text);
+                texts.add(AiAssistant.reflow(lines));
+            }
+        } finally {
+            save(index);
+        }
+        return texts;
+    }
+
     private static List<Line> bodyLines(Engine engine, Index index, int page, boolean forceOcr) throws Exception {
         synchronized (index) {
             if (!forceOcr) {
