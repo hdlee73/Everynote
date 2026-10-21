@@ -59,6 +59,13 @@ final class EpubBook implements Closeable {
         } catch (IOException e) { return null; }
     }
 
+    /** Uncompressed size of a file in the package (0 when unknown); used to estimate how many pages a chapter will take. */
+    long size(String path) {
+        String real = path == null ? null : names.get(path.toLowerCase(Locale.ROOT));
+        ZipEntry entry = real == null ? null : zip.getEntry(real);
+        return entry == null ? 0 : Math.max(0, entry.getSize());
+    }
+
     int spineIndex(String path) {
         for (int i = 0; i < spine.size(); i++) if (spine.get(i).equalsIgnoreCase(path)) return i;
         return -1;

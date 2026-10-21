@@ -723,8 +723,24 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
     @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(req==EPUB_READER){if(result==RESULT_OK&&data!=null&&data.getStringExtra(EpubReaderActivity.RESULT_PDF)!=null){File pdf=new File(data.getStringExtra(EpubReaderActivity.RESULT_PDF));if(pdf.isFile()){openPdf(Uri.fromFile(pdf));toast("EPUB을 PDF로 변환해 열었습니다. 필기할 수 있습니다");}}return;}if(req==EXPORT_PDF){receivePdfExport(result,data);return;}if(req==IMPORT_TREE){receiveFolderImport(result,data);return;}if(req==EXPORT_BACKUP){receiveBackupExport(result,data);return;}if(req==IMPORT_BACKUP){receiveBackupImport(result,data);return;}if(req==EXPORT_ORIGINAL){receiveOriginalExport(result,data);return;}if(req==IMPORT_IMAGE){if(result==RESULT_OK&&data!=null&&data.getData()!=null)importImage(data.getData());return;}if(req==IMPORT_TEMPLATE){if(result==RESULT_OK&&data!=null&&data.getData()!=null)receiveTemplate(data.getData());return;}if(req==IMPORT_VIDEO){if(result==RESULT_OK&&data!=null&&data.getData()!=null)importVideo(data.getData());return;}if(req==EXPORT_CAPTURE){receiveCaptureExport(result,data);return;}if(req==EXPORT_STUDY||req==IMPORT_SIDECAR){receiveStudyResult(req,result,data);return;}if(req==TRANSLATE_EXTERNAL){receiveExternalTranslation(result,data);return;}if(result!=RESULT_OK||data==null||data.getData()==null)return;Uri u=data.getData();if(req==OPEN_PDF){try{getContentResolver().takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(SecurityException ignored){}openPdf(u);}else if(req==EXPORT_JSON){try(OutputStream out=getContentResolver().openOutputStream(u,"wt")){if(out==null||pendingJsonExport==null)throw new IOException("다시 백업하세요");out.write(pendingJsonExport.getBytes(java.nio.charset.StandardCharsets.UTF_8));toast("주석을 내보냈습니다");}catch(Exception e){toast("내보내기 실패: "+e.getMessage());}}}
     /** An EPUB opens in its own read-only reader; its "필기" button returns a PDF made with the reader settings, which opens here as a normal note document. */
     private void openEpub(Uri uri,String name){
-        try{startActivityForResult(new Intent(this,EpubReaderActivity.class).setData(uri).putExtra(EpubReaderActivity.EXTRA_NAME,name).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),EPUB_READER);}
+        EpubStore store=new EpubStore(this);
+        if(store.contains(new File(uri.getPath()==null?"":uri.getPath()))&&"file".equals(uri.getScheme())){launchEpub(uri,new File(uri.getPath()).getName());return;}
+        ProgressDialog progress=ProgressDialog.show(this,"","EPUB 책 목록에 저장하는 중…",true,false);
+        new Thread(()->{try{
+            File saved=store.add(this,uri,name);
+            runOnUiThread(()->{progress.dismiss();if(!isFinishing()&&!isDestroyed())launchEpub(Uri.fromFile(saved),saved.getName());});
+        }catch(Exception e){runOnUiThread(()->{progress.dismiss();toast("EPUB을 열 수 없습니다: "+e.getMessage());if(sessions.isEmpty())showWelcome();});}},"epub-save").start();
+    }
+    private void launchEpub(Uri uri,String name){
+        try{startActivityForResult(new Intent(this,EpubReaderActivity.class).setData(uri).putExtra(EpubReaderActivity.EXTRA_NAME,name),EPUB_READER);}
         catch(RuntimeException e){toast("EPUB 리더를 열 수 없습니다");if(sessions.isEmpty())showWelcome();}
+    }
+    /** The separate "EPUB 책" category of the document box. */
+    private void showEpubShelf(){
+        new EpubShelfDialog(this,new EpubStore(this),new EpubShelfDialog.Actions(){
+            public void open(File book){launchEpub(Uri.fromFile(book),book.getName());}
+            public void importBook(){choosePdf();}
+        }).show();
     }
     private boolean isOfficeDocument(String name){String value=name.toLowerCase(Locale.ROOT);return value.endsWith(".hwp")||value.endsWith(".hwpx")||value.endsWith(".doc")||value.endsWith(".docx")||value.endsWith(".ppt")||value.endsWith(".pptx")||value.endsWith(".xls")||value.endsWith(".xlsx");}
     private boolean canConvertOffice(String name){String lower=name.toLowerCase(Locale.ROOT);return lower.endsWith(".doc")||lower.endsWith(".docx")||lower.endsWith(".ppt")||lower.endsWith(".pptx")||lower.endsWith(".xls")||lower.endsWith(".xlsx");}
@@ -1632,6 +1648,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         libraryDialog=new LibraryDialog(this,library,libraryFolder,new LibraryDialog.Actions(){
             public void open(File file){openPdf(Uri.fromFile(file));}
             public void importFiles(File folder){choosePdf();}
+            public void epubShelf(){showEpubShelf();}
             public void importFolder(File folder){chooseFolderToImport(folder);}
             public void newNote(File folder,Runnable refresh){createNotebook(library.root,refresh);}
             public void changed(File source,File target,boolean moved){if(moved)libraryChanged(source,target);}
