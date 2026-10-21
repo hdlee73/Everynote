@@ -27,6 +27,10 @@
         <provider android:name=".CaptureProvider" android:authorities="${applicationId}.captures" android:exported="false" android:grantUriPermissions="true" />
         <service android:name=".OfficeConversionService" android:process=":office" android:exported="false" />
         <activity
+            android:name=".EpubReaderActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden"
             android:exported="true">
@@ -39,6 +43,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/epub+zip" />
                 <data android:mimeType="application/msword" />
                 <data android:mimeType="application/vnd.ms-excel" />
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
