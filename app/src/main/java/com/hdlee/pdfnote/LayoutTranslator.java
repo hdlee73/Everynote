@@ -35,12 +35,12 @@ final class LayoutTranslator {
     /** A paragraph: consecutive lines of one column, in page pixels. */
     static final class Block {
         final StringBuilder text = new StringBuilder();
-        float left, top, right, bottom, lineHeight, lastLeft;
+        float left, top, right, bottom, lineHeight, lastLeft, firstTop, lastTop;
         int lines;
 
         Block(SearchScanner.Line line, float w, float h) {
             left = line.left * w; top = line.top * h; right = line.right * w; bottom = line.bottom * h;
-            lastLeft = left; lineHeight = Math.max(1f, bottom - top); lines = 1;
+            lastLeft = left; firstTop = lastTop = top; lineHeight = Math.max(1f, bottom - top); lines = 1;
             text.append(line.text.trim());
         }
 
@@ -48,9 +48,23 @@ final class LayoutTranslator {
             float l = line.left * w, t = line.top * h, r = line.right * w, b = line.bottom * h;
             left = Math.min(left, l); right = Math.max(right, r); top = Math.min(top, t); bottom = Math.max(bottom, b);
             lineHeight = (lineHeight * lines + Math.max(1f, b - t)) / (lines + 1);
-            lastLeft = l; lines++;
+            lastLeft = l; lastTop = t; lines++;
             text.append(' ').append(line.text.trim());
         }
+    }
+
+    /** Distance from one line to the next: measured between the lines of a multi-line paragraph (steadier than the glyph height, which depends on which letters a line happens to hold). */
+    static float pitch(Block block) {
+        return block.lines > 1 ? Math.max(block.lineHeight, (block.lastTop - block.firstTop) / (block.lines - 1)) : block.lineHeight * 1.4f;
+    }
+
+    /** The page's body line pitch: the median over its paragraphs, multi-line ones counted by their lines. */
+    static float basePitch(List<Block> blocks) {
+        List<Float> values = new ArrayList<>();
+        for (Block b : blocks) if (b.lines > 1) for (int i = 0; i < b.lines; i++) values.add(pitch(b));
+        if (values.isEmpty()) for (Block b : blocks) values.add(pitch(b));
+        Collections.sort(values);
+        return values.get(values.size() / 2);
     }
 
     private static final Pattern ITEM_START = Pattern.compile("^([\\u2460-\\u2473\\u2474-\\u2487]|\\(?\\d{1,3}[.)]|[\\uAC00-\\uD7A3][.)]|[-\\u2022\\u00B7\\u25CF\\u25A0]).*");
@@ -192,7 +206,7 @@ final class LayoutTranslator {
     }
 
     /** Writes [translated] into the paragraph's own box, shrinking the letters until the text fits. */
-    private static void write(Canvas canvas, Bitmap image, Block block, int background, String translated) {
+    private static void write(Canvas canvas, Bitmap image, Block block, int background, String translated, float base) {
         if (translated.isEmpty()) return;
         float pad = block.lineHeight * 0.12f;
         float left = Math.max(0f, block.left - pad), top = Math.max(0f, block.top - pad);
@@ -200,17 +214,24 @@ final class LayoutTranslator {
         if (right - left < 2f || bottom - top < 2f) return;
         TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(luma(background) < 128 ? Color.WHITE : Color.BLACK);
-        float size = block.lineHeight * 0.82f, min = size * 0.4f;
+        // one body size for the whole page: a paragraph whose pitch is near the page's gets exactly that, so sizes do not wander
+        // with the glyph heights of the original; clearly bigger or smaller text (titles, footnotes) keeps its own size
+        float pitch = pitch(block);
+        if (pitch > 0.8f * base && pitch < 1.25f * base) pitch = base;
+        paint.setTextSize(100f);
+        Paint.FontMetrics fm = paint.getFontMetrics();
+        float size = pitch * 100f / Math.max(1f, fm.descent - fm.ascent), min = size * 0.75f;
+        top = Math.max(0f, block.top - 0.15f * pitch);
         int width = Math.max(1, Math.round(right - left));
         StaticLayout layout;
         while (true) {
             paint.setTextSize(size);
-            layout = StaticLayout.Builder.obtain(translated, 0, translated.length(), paint, width).setAlignment(Layout.Alignment.ALIGN_NORMAL).setLineSpacing(0f, 1.05f).build();
+            layout = StaticLayout.Builder.obtain(translated, 0, translated.length(), paint, width).setAlignment(Layout.Alignment.ALIGN_NORMAL).setLineSpacing(0f, 1f).build();
             if (layout.getHeight() <= (bottom - top) * 1.02f || size <= min) break;
-            size = Math.max(min, size * 0.93f);
+            size = Math.max(min, size * 0.95f);
         }
         canvas.save();
-        canvas.clipRect(left, top, right, bottom + block.lineHeight * 0.3f);
+        canvas.clipRect(left, top, right, Math.max(bottom, top + layout.getHeight()) + 0.3f * pitch);
         canvas.translate(left, top);
         layout.draw(canvas);
         canvas.restore();
@@ -240,13 +261,14 @@ final class LayoutTranslator {
                         Bitmap original = image.copy(Bitmap.Config.ARGB_8888, false);
                         try {
                             Canvas canvas = new Canvas(image);
+                            float base = basePitch(blocks);
                             List<Cover> covers = new ArrayList<>();
                             for (Block b : blocks) covers.add(plan(original, b, blocks));
                             for (Cover c : covers) if (c != null) wipe(canvas, c);   // all the wiping first, so no cover can erase a neighbour's new text
                             for (int i = 0; i < blocks.size(); i++) {
                                 Cover c = covers.get(i);
                                 int background = c != null ? c.background : Color.WHITE;
-                                write(canvas, original, blocks.get(i), background, done.get(i));
+                                write(canvas, original, blocks.get(i), background, done.get(i), base);
                             }
                         } finally { original.recycle(); }
                         translatedPages++;

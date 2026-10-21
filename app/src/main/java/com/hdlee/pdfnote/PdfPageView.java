@@ -572,6 +572,14 @@ final class PdfPageView extends View {
         return new RectF(left, top, left + size[0], top + size[1]);
     }
 
+    /** A single page (a split-screen pane too) never paints past its own bounds, even though the pane row does not clip its children; only a two-page spread draws across the seam. */
+    @Override public void draw(Canvas canvas) {
+        if (spreadSide != 0) { super.draw(canvas); return; }
+        int saved = canvas.save();
+        canvas.clipRect(0, 0, getWidth(), getHeight());
+        try { super.draw(canvas); } finally { canvas.restoreToCount(saved); }
+    }
+
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (bitmap == null) return;
