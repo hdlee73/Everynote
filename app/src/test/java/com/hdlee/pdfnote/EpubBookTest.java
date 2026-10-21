@@ -65,7 +65,7 @@ public class EpubBookTest {
     @Test public void settingsCssFollowsValues() {
         EpubSettings s = new EpubSettings(org.robolectric.RuntimeEnvironment.getApplication());
         s.line = 20; s.margin = 8; s.font = 1; s.theme = 3;
-        String css = s.css();
-        assertTrue(css, css.contains("line-height:2.0") && css.contains("padding:16px 8px") && css.contains("serif") && css.contains("#000000"));
+        String css = s.css(30, 40);
+        assertTrue(css, css.contains("line-height:2.0") && css.contains("padding:30px 20px 40px") && css.contains("column-width:calc(100vw - 40px)") && css.contains("serif") && css.contains("#000000"));
     }
 }

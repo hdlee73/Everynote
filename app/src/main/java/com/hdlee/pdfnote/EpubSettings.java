@@ -34,17 +34,28 @@ final class EpubSettings {
 
     static String fontStack(int font) { return font == 1 ? "serif" : font == 2 ? "sans-serif" : null; }
 
-    /** Style sheet injected into every chapter; it overrides the book's own sizes only where the reader controls them. */
-    String css() {
+    /** Side padding of a page in CSS pixels: the reader's margin setting on top of a small fixed gutter. */
+    int side() { return 12 + margin; }
+
+    /**
+     * Style sheet injected into every chapter. The body becomes a column container exactly one screen wide and high, so each
+     * column is one page and a page turn is a horizontal scroll by one screen width. [top] and [bottom] (CSS pixels) keep the text
+     * clear of the status bar, a camera cut-out and the page number.
+     */
+    String css(int top, int bottom) {
         String family = fontStack(font);
         String color = String.format("#%06X", foreground() & 0xFFFFFF), bg = String.format("#%06X", background() & 0xFFFFFF);
         String link = dark() ? "#8AB4FF" : "#0A5BD8";
-        return "html,body{background:" + bg + " !important;color:" + color + " !important;}"
-            + "body{margin:0 !important;padding:16px " + margin + "px 56px !important;box-sizing:border-box !important;max-width:none !important;width:auto !important;overflow-wrap:break-word;}"
+        int side = side();
+        return "html{height:100% !important;overflow:hidden !important;background:" + bg + " !important;color:" + color + " !important;}"
+            + "body{margin:0 !important;padding:" + top + "px " + side + "px " + bottom + "px !important;width:100vw !important;height:100vh !important;box-sizing:border-box !important;"
+            + "max-width:none !important;background:transparent !important;overflow-wrap:break-word;"
+            + "column-width:calc(100vw - " + (2 * side) + "px) !important;column-gap:" + (2 * side) + "px !important;column-fill:auto !important;}"
             + "body,body *{line-height:" + lineSpacing() + " !important;color:inherit !important;background-color:transparent !important;max-width:100%;box-sizing:border-box;"
             + (family == null ? "" : "font-family:" + family + " !important;") + "}"
             + "code,pre,tt,kbd{font-family:monospace !important;}"
-            + "img,svg,video{max-width:100% !important;height:auto !important;}"
+            + "img,svg,video{max-width:100% !important;max-height:calc(100vh - " + (top + bottom) + "px) !important;width:auto;height:auto !important;object-fit:contain;break-inside:avoid;}"
+            + "h1,h2,h3,h4{break-after:avoid;}"
             + "a,a *{color:" + link + " !important;}";
     }
 

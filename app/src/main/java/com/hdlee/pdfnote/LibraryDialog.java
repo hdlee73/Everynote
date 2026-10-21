@@ -37,6 +37,8 @@ final class LibraryDialog extends Dialog {
         default void restoreBackup(){}
         /** Open the same-network sync with the Windows app (needs no open document). */
         default void deviceSync(){}
+        /** Open the separate "EPUB 책" category. */
+        default void epubShelf(){}
     }
     private static final int ALL=0,FAVORITES=1,RECENT=2,FOLDER=3,TRASH=4;
     private static final String[] NAV_NAMES={"모든 노트","즐겨찾기","최근 문서","휴지통"};
@@ -256,6 +258,7 @@ final class LibraryDialog extends Dialog {
         LinearLayout top=new LinearLayout(activity);top.setGravity(Gravity.CENTER_VERTICAL);top.addView(icon(R.drawable.ic_menu,docked?"폴더 트리 보기":"폴더 트리 닫기",v->{if(docked)toggleNavCollapsed();else closeDrawer();}),new LinearLayout.LayoutParams(dp(48),dp(48)));panel.addView(top,new LinearLayout.LayoutParams(-1,dp(52)));
         int[] icons={R.drawable.ic_notes_all,R.drawable.ic_star_outline,R.drawable.ic_clock,R.drawable.ic_delete};
         for(int i=0;i<4;i++){final int index=i;panel.addView(drawerRow(icons[i],NAV_NAMES[i],"drawer_count:"+i,v->{closeDrawer();showMode(index==3?TRASH:index);}),new LinearLayout.LayoutParams(-1,dp(46)));}
+        panel.addView(drawerRow(R.drawable.ic_book,"EPUB 책",null,v->{closeDrawer();actions.epubShelf();}),new LinearLayout.LayoutParams(-1,dp(46)));
         panel.addView(dashes(),dashParams());
         panel.addView(drawerRow(R.drawable.ic_folder_check,"폴더","drawer_count:4",v->selectFolder(repository.root)),new LinearLayout.LayoutParams(-1,dp(46)));
         tree=new FolderTreeView(activity,repository,folder,this::selectFolder,false);tree.setFolderMenu(this::folderMenu);tree.setBackgroundColor(Color.TRANSPARENT);panel.addView(tree,new LinearLayout.LayoutParams(-1,0,1));
