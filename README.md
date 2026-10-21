@@ -4,7 +4,8 @@ Android 문서 독서·주석 앱입니다. 문서와 주석은 앱 내부에서
 
 ## 주요 기능
 
-- Android 파일 선택기로 PDF·HWP·HWPX·DOC·DOCX·PPT·PPTX 선택
+- Android 파일 선택기로 PDF·HWP·HWPX·DOC·DOCX·PPT·PPTX·EPUB 선택
+- EPUB은 읽기 전용 리더(글자 크기·줄 간격·여백·글꼴·배경, 목차, 읽던 위치 기억)로 열고, ‘필기’로 같은 설정의 PDF를 만들어 필기 화면에서 열기
 - DOC·DOCX·PPT·PPTX 선택 시 기기 내 LibreOffice 엔진으로 PDF 자동 변환 후 문서함에 바로 가져와 열기(변환용 임시 파일은 삭제, 별도 사본 없음)
 - HWP·HWPX는 앱에 포함된 rhwptopdf 엔진으로 오프라인 PDF 변환 후 문서함에 가져와 열기(본문·표·그림, 지원 범위는 문서에 따라 다름)
 - 실제 색상을 보면서 고르는 5색 하이라이트(영역 드래그)
@@ -136,9 +137,13 @@ Touching a word starts a fresh selection even near the previous selection handle
 - 문서 탭에 파일 아이콘, 얇은 테두리와 활성 표시. 긴 문서명은 앞부분부터 표시하고 끝부분만 생략. 선택한 탭이 보이도록 자동 이동.
 - 폴더에 둥근 탭·종이·음영을 적용한 색상 아이콘, 카드에 항목 수 표시. 폴더 트리와 목록에도 같은 디자인 적용.
 
-### v1.68.3 AI 번역 글자 크기 통일, 분할 화면 확대 영역 제한
+### v1.69.1 AI 번역 글자 크기 통일, 분할 화면 확대 영역 제한
 - AI 번역문 크기를 글자 높이가 아닌 줄 간격 기준으로 정하고, 한 페이지의 본문은 같은 크기로 맞춤(제목·각주처럼 크게 다른 글은 그대로). 번역문은 원문 단락 위치에서 시작하며 줄 간격도 원문과 같게 함.
 - 분할 화면에서 문서를 확대하면 확대된 쪽이 자기 창을 벗어나 옆 문서를 가리던 문제 수정(`PdfPageView.draw`에서 자기 영역으로 잘라 그림).
+
+### v1.69.0 EPUB 리더
+- `EpubReaderActivity`: EPUB(zip)을 `EpubBook`으로 읽어 WebView에 그립니다(`https://epub.local/` 가상 주소로 zip 안 파일을 제공하고 네트워크는 차단). 읽기 조절(`EpubSettings`)은 이 화면에만 있어 PDF 화면의 메뉴는 늘지 않습니다. 뒤로 가기는 열려 있는 패널, 링크·목차로 이동하기 전 위치, 마지막으로 이전 화면(문서 화면) 순서로 되돌립니다.
+- ‘필기’: `EpubPdf`가 같은 설정(글자 크기·줄 간격·여백·글꼴)으로 A5 PDF를 만들고(안드로이드 `Html`+`StaticLayout`, 본문·제목·강조·그림 위주, 표는 글자만) `LibraryRepository.importPdf`로 문서함에 저장한 뒤 `MainActivity`가 일반 PDF로 엽니다. 설정을 바꿔 다시 변환하면 새 PDF가 되며 기존 필기는 이어지지 않습니다.
 
 ### v1.68.2 AI 번역 번호 표시 제거
 - 번역문 앞에 `[1]` 같은 번호가 찍히던 문제 수정. 번호는 요청·응답 짝맞춤에만 쓰고(`AiAssistant.parseNumbered`), 어떤 위치에 나오든 그리기 전에 `AiAssistant.clean`으로 제거.
