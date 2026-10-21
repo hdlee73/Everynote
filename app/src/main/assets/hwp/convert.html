@@ -4,7 +4,7 @@ async function convertDocument() {
   try {
     await RhwpToPdf({module_or_path: await (await fetch('rhwptopdf.umd_bg.wasm')).arrayBuffer()});
     let loaded=0;
-    for(let i=0;i<3;i++) {
+    for(let i=0;i<8;i++) {
       const res=await fetch('font'+i);
       if(res.ok) { try { RhwpToPdf.registerPdfFont(new Uint8Array(await res.arrayBuffer())); loaded++; } catch(ignore) {} }
     }

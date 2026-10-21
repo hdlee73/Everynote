@@ -27,7 +27,9 @@ final class HwpConversion {
     private OutputStream stream;
     private long expected,written;
     private final Runnable timeout=()->fail("변환 시간이 초과되었습니다");
-    private final String[] fonts={"/system/fonts/NotoSansCJK-Regular.ttc","/system/fonts/Roboto-Regular.ttf","/system/fonts/NotoSerifCJK-Regular.ttc"};
+    // Text fonts first (the first CJK sans/serif become the document defaults), then symbol/math fallbacks that only fill glyphs the text fonts lack (예: ∼ ⅓ ∑).
+    static final String[] FONTS={"/system/fonts/NotoSansCJK-Regular.ttc","/system/fonts/Roboto-Regular.ttf","/system/fonts/NotoSerifCJK-Regular.ttc",
+        "/system/fonts/NotoSansSymbols-Regular-Subsetted.ttf","/system/fonts/NotoSansSymbols-Regular-Subsetted2.ttf","/system/fonts/NotoSansSymbols2-Regular.ttf","/system/fonts/NotoSansMath-Regular.ttf","/system/fonts/DroidSansFallbackFull.ttf"};
 
     HwpConversion(Activity activity,ViewGroup parent,Callback callback){this.activity=activity;this.parent=parent;this.callback=callback;}
     void start(Uri source){
@@ -55,7 +57,7 @@ final class HwpConversion {
                     if(!"https".equals(u.getScheme())||!"pdfnote.local".equals(u.getHost())||path==null)return missing();
                     try{
                         if(path.equals("/hwp/document"))return response("application/octet-stream",new FileInputStream(input));
-                        for(int i=0;i<fonts.length;i++)if(path.equals("/hwp/font"+i))return response("font/ttf",new FileInputStream(fonts[i]));
+                        for(int i=0;i<FONTS.length;i++)if(path.equals("/hwp/font"+i))return response("font/ttf",new FileInputStream(FONTS[i]));
                         String name=path.substring(path.lastIndexOf('/')+1);
                         if(!name.equals("convert.html")&&!name.equals("rhwptopdf.umd.js")&&!name.equals("rhwptopdf.umd_bg.wasm"))return missing();
                         return response(name.endsWith(".wasm")?"application/wasm":name.endsWith(".js")?"application/javascript":"text/html",activity.getAssets().open("hwp/"+name));
