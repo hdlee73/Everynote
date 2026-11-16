@@ -222,17 +222,15 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         ImageButton libraryButton=icon(R.drawable.ic_chevron_left,"문서함",NAVY,v->showLibrary());libraryButton.setTag("editor_back");libraryButton.setPadding(dp(10),dp(10),dp(10),dp(10));header.addView(libraryButton,new LinearLayout.LayoutParams(dp(44),dp(52)));
         titleView=new TextView(this);titleView.setTextColor(NAVY);titleView.setTextSize(20);titleView.setTypeface(Typeface.DEFAULT_BOLD);titleView.setTag("document_title");titleView.setOnClickListener(v->{if(activeSession!=null)beginTitleEdit();else showLibrary();});titleView.setSingleLine();titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);titleView.setTextDirection(View.TEXT_DIRECTION_LTR);titleView.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);titleView.setPadding(dp(8),0,dp(8),0);titleView.setBackground(null);titleView.setMaxWidth(Math.round(getResources().getDisplayMetrics().widthPixels*.46f));titleView.setPadding(dp(4),0,dp(8),0);LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(-2,dp(36));titleParams.setMargins(0,0,dp(6),0);header.addView(titleView,titleParams);header.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
         header.addOnLayoutChangeListener((v,l,t,rr,b,ol,ot,or,ob)->{int w=rr-l;if(w>0)applyHeaderWidth(w);});
-        // Same top bar as HDnotes for Windows: "<" + title, then 전체 화면 · 읽기 모드 · 페이지 관리 · 노트 스타일 · 삽입 · 공유 · 파일로 저장 · 인쇄 · 검색 and ⋮
-        headerAction(R.drawable.ic_fullscreen,"전체 화면","전체 화면","h_fullscreen",v->toggleFullscreen());
+        // Streamlined top bar: 읽기 모드 · 파일 · 보기 · 페이지 · 삽입 · AI · 검색 · 전체 화면 and ⋮
         readButton=headerAction(R.drawable.ic_reading_mode,"읽기 모드","읽기 모드","h_read",v->toggleReadMode());
-        headerAction(R.drawable.ic_page_manage,"페이지 관리","페이지 관리","h_pages",v->showPageManageMenu(v));
-        headerAction(R.drawable.ic_note_style,"노트 스타일","노트 스타일","h_style",v->showViewMenu(v));
+        headerAction(R.drawable.ic_save_file,"파일","파일","h_file",v->showFileMenu(v));
+        headerAction(R.drawable.ic_eye,"보기","보기","h_style",v->showViewMenu(v));
+        headerAction(R.drawable.ic_page_manage,"페이지","페이지","h_pages",v->showPageManageMenu(v));
         insertButton=headerAction(R.drawable.ic_insert,"삽입","삽입","h_insert",v->showInsertMenu(v));
         headerAction(R.drawable.ic_magic,"AI","AI (Gemini Nano)","h_ai",v->showAiMenu(v));
-        headerAction(R.drawable.ic_share,"공유","공유","h_share",v->showShareMenu(v));
-        headerAction(R.drawable.ic_save_file,"파일로 저장","파일로 저장","h_save",v->showSaveMenu(v));
-        headerAction(R.drawable.ic_print,"인쇄","인쇄","h_print",v->{if(renderer!=null)printDocument();else toast("문서를 먼저 여세요");});
         headerAction(R.drawable.ic_search,"검색","검색","h_search",v->searchDocument());
+        headerAction(R.drawable.ic_fullscreen,"전체 화면","전체 화면","h_fullscreen",v->toggleFullscreen());
         header.addView(icon(R.drawable.ic_more_vert,"도구",NAVY,v->showMainMenu(v,false)),new LinearLayout.LayoutParams(dp(44),dp(52)));content.addView(header,new LinearLayout.LayoutParams(-1,dp(52)));
         tabStrip=new HorizontalScrollView(this);tabStrip.setHorizontalScrollBarEnabled(false);tabStrip.setBackgroundColor(0xFFF7F7F7);tabRow=new LinearLayout(this);tabRow.setGravity(Gravity.CENTER_VERTICAL);tabRow.setPadding(dp(6),dp(4),dp(6),dp(4));tabStrip.addView(tabRow,new HorizontalScrollView.LayoutParams(-2,-1));content.addView(tabStrip,new LinearLayout.LayoutParams(-1,dp(40)));
         LinearLayout viewerRow=new LinearLayout(this);viewerRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -326,7 +324,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         int width=Math.round(w/getResources().getDisplayMetrics().density);boolean labels=width>=1180,opt=width>=820,narrow=width<560;
         int max=Math.max(dp(60),Math.min(Math.round(w*.46f),w-dp(labels?960:width>=820?470:width>=560?350:270)));if(titleView.getMaxWidth()!=max)titleView.setMaxWidth(max);
         for(int i=0;i<header.getChildCount();i++){final View hc=header.getChildAt(i);Object tag=hc.getTag();if(!(tag instanceof String)||!((String)tag).startsWith("h_"))continue;String t=(String)tag;
-            final boolean show=(opt||!(t.equals("h_share")||t.equals("h_save")||t.equals("h_print")||t.equals("h_ai")))&&!(narrow&&(t.equals("h_pages")||t.equals("h_fullscreen")))&&(aiSupported||!t.equals("h_ai"));
+            final boolean show=(opt||!(t.equals("h_file")||t.equals("h_ai")))&&!(narrow&&(t.equals("h_pages")||t.equals("h_fullscreen")))&&(aiSupported||!t.equals("h_ai"));
             if(hc.getVisibility()!=(show?View.VISIBLE:View.GONE))hc.post(()->hc.setVisibility(show?View.VISIBLE:View.GONE));
             final View lbl=hc.findViewWithTag("header_label");if(lbl!=null&&lbl.getVisibility()!=(labels?View.VISIBLE:View.GONE))lbl.post(()->lbl.setVisibility(labels?View.VISIBLE:View.GONE));}
     }
@@ -645,23 +643,22 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         toast("문서함에서 합칠 문서를 선택하세요 (선택 > ⋮ > 문서 합치기)");
         showLibrary();if(libraryDialog!=null)libraryDialog.beginSelection(self);
     }
-    private List<AnchoredMenu.Row> shareRows(){return AnchoredMenu.rows(
-        new AnchoredMenu.Row("PDF로 공유 (주석 포함)",R.drawable.ic_pdf,this::exportPdf).tint(NAVY),
+    private List<AnchoredMenu.Row> fileRows(){return AnchoredMenu.rows(
+        new AnchoredMenu.Row("PDF로 내보내기 (주석 포함)",R.drawable.ic_pdf,this::exportPdf).tint(NAVY),
+        new AnchoredMenu.Row("원본 파일로 저장",R.drawable.ic_original,this::exportOriginal).tint(NAVY),
         new AnchoredMenu.Row("노트·발췌 내보내기",R.drawable.ic_export,this::exportStudy).tint(NAVY),
-        new AnchoredMenu.Row("다른 기기와 동기화",R.drawable.ic_sync,this::showDeviceSync).tint(NAVY));}
-    private List<AnchoredMenu.Row> saveRows(){return AnchoredMenu.rows(
-        new AnchoredMenu.Row("PDF 파일",R.drawable.ic_pdf,this::exportPdf).tint(NAVY),
-        new AnchoredMenu.Row("원본 파일",R.drawable.ic_original,this::exportOriginal).tint(NAVY),
+        AnchoredMenu.Row.divider(),
         new AnchoredMenu.Row("이 문서 필기 백업 저장",R.drawable.ic_backup,this::exportAnnotations).tint(NAVY),
         new AnchoredMenu.Row("이 문서 필기 백업 불러오기",R.drawable.ic_import,this::importSidecar).tint(NAVY),
-        AnchoredMenu.Row.divider(),
+        new AnchoredMenu.Row("다른 기기와 동기화",R.drawable.ic_sync,this::showDeviceSync).tint(NAVY),
         new AnchoredMenu.Row("모든 문서 백업",R.drawable.ic_backup,this::startLibraryBackup).tint(NAVY),
-        new AnchoredMenu.Row("모든 문서 복원",R.drawable.ic_import,this::startLibraryRestore).tint(NAVY));}
-    private void showShareMenu(View anchor){if(renderer==null){toast("문서를 먼저 여세요");return;}AnchoredMenu.show(this,anchor,!inHeader(anchor),shareRows(),null);}
-    private void showSaveMenu(View anchor){if(renderer==null){toast("문서를 먼저 여세요");return;}AnchoredMenu.show(this,anchor,!inHeader(anchor),saveRows(),null);}
+        new AnchoredMenu.Row("모든 문서 복원",R.drawable.ic_import,this::startLibraryRestore).tint(NAVY),
+        AnchoredMenu.Row.divider(),
+        new AnchoredMenu.Row("인쇄",R.drawable.ic_print,this::printDocument).tint(NAVY));}
+    private void showFileMenu(View anchor){if(renderer==null){toast("문서를 먼저 여세요");return;}AnchoredMenu.show(this,anchor,!inHeader(anchor),fileRows(),null);}
     private List<AnchoredMenu.Row> libraryBackupRows(){return AnchoredMenu.rows(new AnchoredMenu.Row("다른 기기와 동기화",R.drawable.ic_sync,this::showDeviceSync).tint(NAVY),new AnchoredMenu.Row("모든 문서 백업",R.drawable.ic_backup,this::startLibraryBackup).tint(NAVY),new AnchoredMenu.Row("모든 문서 복원",R.drawable.ic_import,this::startLibraryRestore).tint(NAVY));}
     private List<AnchoredMenu.Row> rowsOf(int category){List<AnchoredMenu.Row> rows=new ArrayList<>();for(Tile t:categoryTiles(category)){AnchoredMenu.Row r=new AnchoredMenu.Row(t.label,t.icon,t.action).selected(t.selected);if(t.tint!=0)r.danger();rows.add(r);}return rows;}
-    /** Compact top-right menu: the common actions, with the long tail grouped into sub menus. */
+    /** Compact top-right menu: streamlined without duplicating header File/Save/Share menus. */
     private void showMainMenu(View anchor,boolean above){
         boolean doc=renderer!=null;boolean awake=recentPrefs.getBoolean("keep_awake",false);
         List<AnchoredMenu.Row> rows=new ArrayList<>();
@@ -670,22 +667,20 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         if(activeSession!=null)rows.add(new AnchoredMenu.Row("이름 변경",R.drawable.ic_rename,()->renameDocument(activeSession)).tint(MUTED));
         if(doc){
             rows.add(AnchoredMenu.Row.divider());
-            if(headerHidden("h_share"))rows.add(new AnchoredMenu.Row("공유",R.drawable.ic_share,null).children(shareRows()).tint(NAVY).submenu());
-            if(headerHidden("h_save"))rows.add(new AnchoredMenu.Row("파일로 저장",R.drawable.ic_save_file,null).children(saveRows()).tint(NAVY).submenu());
+            if(headerHidden("h_file"))rows.add(new AnchoredMenu.Row("파일·내보내기·인쇄",R.drawable.ic_save_file,null).children(fileRows()).tint(NAVY).submenu());
             if(headerHidden("h_ai"))rows.add(new AnchoredMenu.Row(aiSupported?"AI (요약·번역·교정)":"AI (이 기기에서는 사용 불가)",R.drawable.ic_magic,()->anchor.post(()->showAiMenu(anchor))).tint(aiSupported?NAVY:MUTED));
             if(headerHidden("h_pages"))rows.add(new AnchoredMenu.Row("페이지 관리",R.drawable.ic_page_manage,()->anchor.post(()->showPageManageMenu(anchor))).tint(NAVY));
             rows.add(new AnchoredMenu.Row("메모·하이라이트",R.drawable.ic_highlight,this::showMarkList).tint(NAVY));
             rows.add(new AnchoredMenu.Row("책갈피 목록",R.drawable.ic_star,this::showBookmarks).tint(NAVY));
             rows.add(new AnchoredMenu.Row("번역 포스트잇",R.drawable.ic_translate,this::showTranslations).tint(NAVY));
-            rows.add(new AnchoredMenu.Row("삽입",R.drawable.ic_insert,null).children(rowsOf(2)).tint(NAVY).submenu());
             rows.add(new AnchoredMenu.Row("학습·주석",R.drawable.ic_study,null).children(rowsOf(3)).tint(NAVY).submenu());
+        }else{
+            rows.add(AnchoredMenu.Row.divider());
+            rows.add(new AnchoredMenu.Row("동기화·전체 백업",R.drawable.ic_backup,null).children(libraryBackupRows()).tint(NAVY).submenu());
         }
-        // whole-library backup / restore lives only in 내보내기·백업 (also offered with no document open)
-        rows.add(new AnchoredMenu.Row("내보내기·백업",R.drawable.ic_share,null).children(doc?rowsOf(4):libraryBackupRows()).tint(NAVY).submenu());
         rows.add(AnchoredMenu.Row.divider());
         rows.add(new AnchoredMenu.Row("화면 켜 둠",R.drawable.ic_clock,()->{recentPrefs.edit().putBoolean("keep_awake",!awake).apply();applyKeepAwake();toast(!awake?"읽는 동안 화면이 꺼지지 않습니다":"화면 자동 꺼짐을 따릅니다");}).tint(MUTED).selected(awake));
         rows.add(new AnchoredMenu.Row("도구 모음 위치·방향",R.drawable.ic_float,()->anchor.post(()->showBarLayoutMenu(anchor))).tint(MUTED));
-        if(doc)rows.add(new AnchoredMenu.Row("인쇄",R.drawable.ic_print,this::printDocument).tint(NAVY));
         rows.add(AnchoredMenu.Row.divider());
         rows.add(new AnchoredMenu.Row("설정",R.drawable.ic_settings,this::showSettings).tint(MUTED));
         rows.add(new AnchoredMenu.Row("사용법",R.drawable.ic_outline,this::showHelp).tint(MUTED));
