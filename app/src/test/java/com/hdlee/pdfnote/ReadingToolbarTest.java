@@ -39,9 +39,9 @@ public class ReadingToolbarTest {
         assertFalse("쪽 번호는 도구 모음이 아니라 본문 아래에 떠 있습니다",isInside(page,bar));
         for(String name:new String[]{"도구 모음 접기","키보드 · 타이핑","펜","형광펜","지우개","올가미 선택","실행 취소","다시 실행","테이프 · 글자를 가리는 마스킹 테이프","하이라이트 · 문장을 따라 직선으로","메모","도형","텍스트 선택","화면 나누기 · 문서 두 개를 나란히","도구 모음 위치·방향"})assertNotNull(name,description(bar,name));
         assertTrue("즐겨찾기",description(bar,"즐겨찾기")!=null||description(bar,"즐겨찾기 추가")!=null||description(bar,"즐겨찾기 해제")!=null);
-        for(String name:new String[]{"읽기 모드","노트 스타일","삽입","검색","전체 화면","페이지 관리","공유","파일로 저장","인쇄"})assertNotNull("상단 막대: "+name,description(header,name));
+        for(String name:new String[]{"읽기 모드","파일","보기","페이지","삽입","검색","전체 화면"})assertNotNull("상단 막대: "+name,description(header,name));
         invoke("showOutlineList");View side=root.findViewWithTag("side_panel");assertEquals("개요는 미리보기 패널의 탭으로 열립니다",View.VISIBLE,side.getVisibility());assertNotNull(root.findViewWithTag("outline_add"));invoke("showOutlineList");assertEquals(View.GONE,side.getVisibility());
-        description(header,"노트 스타일").performClick();assertNull("도구 모음에는 한글 글자가 없습니다",firstText(bar));
+        description(header,"보기").performClick();assertNull("도구 모음에는 한글 글자가 없습니다",firstText(bar));
         page.performClick();screenshot(root,"reading-toolbar.png");
     }
     @Test public void penToolsLiveOnTheStripAndTheFloatingToolbarIsOptional()throws Exception{
@@ -62,7 +62,7 @@ public class ReadingToolbarTest {
         View root=field("root");layout(root,1280,800);layout(root,1280,800);org.robolectric.shadows.ShadowLooper.idleMainLooper();layout(root,1280,800);
         View bar=root.findViewWithTag("reading_toolbar");View work=root.findViewWithTag("work_row");View header=field("header");
         assertEquals("넓은 화면에서는 오른쪽 세로 도구 모음",LinearLayout.VERTICAL,((LinearLayout)bar).getOrientation());assertSame("도구 모음은 본문 옆(상단 막대 아래)에 붙습니다",work,bar.getParent());assertEquals(((ViewGroup)work).getChildCount()-1,((ViewGroup)work).indexOfChild(bar));
-        View label=description(header,"페이지 관리").findViewWithTag("header_label");assertEquals("넓은 화면에서는 상단 단추에 이름이 보입니다",View.VISIBLE,label.getVisibility());
+        View label=description(header,"페이지").findViewWithTag("header_label");assertEquals("넓은 화면에서는 상단 단추에 이름이 보입니다",View.VISIBLE,label.getVisibility());
         description(bar,"도구 모음 접기").performClick();assertEquals(View.GONE,description(bar,"펜").getVisibility());description(bar,"도구 모음 펼치기").performClick();assertEquals(View.VISIBLE,description(bar,"펜").getVisibility());
         screenshot(root,"editor-wide.png");
     }
