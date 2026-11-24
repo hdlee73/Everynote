@@ -10,8 +10,8 @@ android {
         applicationId 'com.hdlee.pdfnote'
         minSdk 26
         targetSdk 35
-        versionCode 89
-        versionName '1.71.0'
+        versionCode 90
+        versionName '1.71.1'
         buildConfigField 'String', 'BUILD_DATE', '"' + new java.text.SimpleDateFormat('yyyy-MM-dd').format(new Date()) + '"'
     }
 
