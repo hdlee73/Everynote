@@ -201,7 +201,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         DocumentSession target=pendingSession;int page=pendingPage;
         pendingSource=null;pendingSession=null;
         if(!sessions.contains(target)){toast("원래 PDF를 다시 열어 번역하세요");return;}
-        switchDocument(target);showPage(page);
+        if(activeSession!=target)switchDocument(target);if(currentPage!=page)showPage(page);   // showPage resets the zoom, so only move when the view really changed
         CharSequence translated=resultCode==RESULT_OK&&data!=null?data.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT):null;
         showTranslationResult(source,translated==null?"":translated.toString(),bounds);
     }
@@ -1439,7 +1439,7 @@ public class MainActivity extends Activity implements PdfPageView.Listener {
         try{startActivity(launch);}catch(RuntimeException error){toast("영어 스터디 앱을 열 수 없습니다");}
     }
     private void addOcrHighlights(List<RectF> bounds){for(RectF b:bounds){AnnotationStore.Mark m=new AnnotationStore.Mark();m.page=currentPage;m.left=b.left;m.top=b.top;m.right=b.right;m.bottom=b.bottom;m.color=selectedColor;store.marks.add(m);}store.save();pageView.invalidate();toast("선택한 범위를 하이라이트했습니다");}
-    private void translateOffline(String source,RectF bounds){final DocumentSession target=activeSession;final int page=currentPage;boolean korean=source.matches(".*[가-힣].*");TranslatorOptions options=new TranslatorOptions.Builder().setSourceLanguage(korean?TranslateLanguage.KOREAN:TranslateLanguage.ENGLISH).setTargetLanguage(korean?TranslateLanguage.ENGLISH:TranslateLanguage.KOREAN).build();Translator translator=Translation.getClient(options);ProgressDialog progress=ProgressDialog.show(this,"번역","번역 모델을 준비하는 중입니다…",true,false);translator.downloadModelIfNeeded(new DownloadConditions.Builder().build()).onSuccessTask(v->translator.translate(source)).addOnSuccessListener(result->{progress.dismiss();translator.close();if(isFinishing()||isDestroyed()||!sessions.contains(target))return;switchDocument(target);showPage(page);showTranslationResult(source,result,bounds);}).addOnFailureListener(e->{progress.dismiss();translator.close();toast("번역 실패: 인터넷 연결을 확인하세요");});}
+    private void translateOffline(String source,RectF bounds){final DocumentSession target=activeSession;final int page=currentPage;boolean korean=source.matches(".*[가-힣].*");TranslatorOptions options=new TranslatorOptions.Builder().setSourceLanguage(korean?TranslateLanguage.KOREAN:TranslateLanguage.ENGLISH).setTargetLanguage(korean?TranslateLanguage.ENGLISH:TranslateLanguage.KOREAN).build();Translator translator=Translation.getClient(options);ProgressDialog progress=ProgressDialog.show(this,"번역","번역 모델을 준비하는 중입니다…",true,false);translator.downloadModelIfNeeded(new DownloadConditions.Builder().build()).onSuccessTask(v->translator.translate(source)).addOnSuccessListener(result->{progress.dismiss();translator.close();if(isFinishing()||isDestroyed()||!sessions.contains(target))return;if(activeSession!=target)switchDocument(target);if(currentPage!=page)showPage(page);showTranslationResult(source,result,bounds);}).addOnFailureListener(e->{progress.dismiss();translator.close();toast("번역 실패: 인터넷 연결을 확인하세요");});}
     /** The translation is placed on the page as a post-it immediately; this card shows original and result and lets the user fix, copy or delete it. */
     private void showTranslationResult(String source,String translated,RectF bounds){
         final AnnotationStore targetStore=store;final int targetPage=currentPage;
